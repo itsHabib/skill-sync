@@ -19,8 +19,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "skill-sync",
-	Short: "Sync AI skills across providers",
+	Use:          "skill-sync",
+	Short:        "Sync AI skills across providers",
+	SilenceUsage: true,
 	Long: `skill-sync reads skills from a source AI assistant (Claude Code, Copilot,
 Gemini CLI, Factory) and syncs them to target providers with drift detection.
 
