@@ -1,6 +1,6 @@
 # skill-sync
 
-Sync AI assistant skills across providers -- write once, use everywhere.
+Sync AI assistant skills across providers.
 
 ## The Problem
 
