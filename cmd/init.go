@@ -23,6 +23,9 @@ Run this once per project. Requires --source and --targets flags.`,
   # Initialize with all targets
   skill-sync init --source claude --targets copilot,gemini,factory
 
+  # Initialize for directory backup (e.g., a git repo)
+  skill-sync init --source claude --target-dir ~/dev/cc-skills
+
   # Use a custom config path
   skill-sync init --source claude --targets copilot --config my-config.yaml`,
 	RunE: runInit,
@@ -36,8 +39,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if InlineSource == "" {
 		return fmt.Errorf("--source is required. Specify your source provider: skill-sync init --source claude --targets copilot,gemini")
 	}
-	if len(InlineTargets) == 0 {
-		return fmt.Errorf("--targets is required. Specify one or more target providers: --targets copilot,gemini,factory")
+	if len(InlineTargets) == 0 && TargetDir == "" {
+		return fmt.Errorf("--targets or --target-dir is required. Examples:\n  skill-sync init --source claude --targets copilot,gemini\n  skill-sync init --source claude --target-dir ~/dev/cc-skills")
 	}
 
 	// Check if config already exists
@@ -45,12 +48,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%s already exists; remove it first or use a different --config path", cfgPath)
 	}
 
-	// Validate provider names against the registry
+	// Build config from flags
 	registered := provider.List()
 	cfg := &config.Config{
-		Source:  InlineSource,
-		Targets: InlineTargets,
-		Skills:  []string{},
+		Source: InlineSource,
+		Skills: []string{},
+	}
+	if TargetDir != "" && len(InlineTargets) == 0 {
+		cfg.TargetDir = TargetDir
+	} else {
+		cfg.Targets = InlineTargets
 	}
 	if err := cfg.Validate(registered); err != nil {
 		return fmt.Errorf("init: %w", err)
@@ -65,6 +72,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("init: writing config: %w", err)
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Created %s (source: %s, targets: %v)\n", cfgPath, cfg.Source, cfg.Targets)
+	w := cmd.OutOrStdout()
+	if cfg.TargetDir != "" {
+		fmt.Fprintf(w, "Created %s (source: %s, target_dir: %s)\n", cfgPath, cfg.Source, cfg.TargetDir)
+	} else {
+		fmt.Fprintf(w, "Created %s (source: %s, targets: %v)\n", cfgPath, cfg.Source, cfg.Targets)
+	}
 	return nil
 }

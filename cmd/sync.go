@@ -27,7 +27,10 @@ Exits with code 1 if any skill fails to sync.`,
   skill-sync sync --skill deploy --skill review
 
   # Sync without a config file
-  skill-sync sync --source claude --targets copilot,gemini`,
+  skill-sync sync --source claude --targets copilot,gemini
+
+  # Sync to a plain directory (e.g., git repo backup)
+  skill-sync sync --source claude --target-dir ~/dev/cc-skills`,
 	RunE: runSync,
 }
 

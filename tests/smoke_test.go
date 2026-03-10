@@ -190,6 +190,99 @@ func TestSmoke_FullFlow(t *testing.T) {
 	}
 }
 
+func TestSmoke_DirectoryMode(t *testing.T) {
+	// Setup: Claude source with fixtures → directory target
+	claudeDir := filepath.Join(t.TempDir(), "claude-skills")
+	backupDir := filepath.Join(t.TempDir(), "cc-skills-backup")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("create claude dir: %v", err)
+	}
+
+	source, err := provider.New("claude", claudeDir)
+	if err != nil {
+		t.Fatalf("create claude provider: %v", err)
+	}
+	target, err := provider.New("directory", backupDir)
+	if err != nil {
+		t.Fatalf("create directory provider: %v", err)
+	}
+	targets := []provider.Provider{target}
+
+	copyFixtures(t, source.SkillDir())
+
+	// -- Sync all skills to directory --
+	syncEng := sync.NewSyncEngine(source, targets)
+	result, syncErr := syncEng.Sync(nil, true)
+	if syncErr != nil {
+		t.Fatalf("Sync to directory failed: %v", syncErr)
+	}
+	if result.TotalErrored != 0 {
+		t.Fatalf("expected 0 errors, got %d", result.TotalErrored)
+	}
+	if result.TotalSynced != 3 {
+		t.Fatalf("expected 3 synced, got %d", result.TotalSynced)
+	}
+
+	// Verify files exist in backup dir using SKILL.md format
+	for _, name := range fixtureNames {
+		path := filepath.Join(backupDir, name, "SKILL.md")
+		if _, statErr := os.Stat(path); statErr != nil {
+			t.Fatalf("directory target skill missing: %s", path)
+		}
+	}
+
+	// -- Status: should be all in-sync --
+	diffEng := sync.NewDiffEngine(source, targets)
+	report, statusErr := diffEng.Status()
+	if statusErr != nil {
+		t.Fatalf("Status failed: %v", statusErr)
+	}
+	for _, drifts := range report.Results {
+		for _, d := range drifts {
+			if d.Status != provider.InSync {
+				t.Errorf("expected InSync for %s, got %s", d.SkillName, d.Status)
+			}
+		}
+	}
+
+	// -- Introduce drift and verify detection --
+	driftFile := filepath.Join(backupDir, "deploy", "SKILL.md")
+	if writeErr := os.WriteFile(driftFile, []byte("# MODIFIED\nChanged content"), 0644); writeErr != nil {
+		t.Fatalf("write drift: %v", writeErr)
+	}
+
+	report, statusErr = diffEng.Status()
+	if statusErr != nil {
+		t.Fatalf("Status after drift failed: %v", statusErr)
+	}
+
+	dirDrifts := report.Results["directory"]
+	var modCount int
+	for _, d := range dirDrifts {
+		if d.Status == provider.Modified {
+			modCount++
+			if d.SkillName != "deploy" {
+				t.Errorf("expected 'deploy' to be Modified, got %s", d.SkillName)
+			}
+		}
+	}
+	if modCount != 1 {
+		t.Errorf("expected 1 Modified, got %d", modCount)
+	}
+
+	// -- Diff should show unified diff --
+	detailed, diffErr := diffEng.Diff("directory")
+	if diffErr != nil {
+		t.Fatalf("Diff failed: %v", diffErr)
+	}
+	if len(detailed.Diffs) != 1 {
+		t.Fatalf("expected 1 diff entry, got %d", len(detailed.Diffs))
+	}
+	if !strings.Contains(detailed.Diffs[0].UnifiedDiff, "---") {
+		t.Error("UnifiedDiff missing --- header")
+	}
+}
+
 func TestSmoke_SkillFilter(t *testing.T) {
 	source, targets, copilotDir, geminiDir := setupProviders(t)
 	copyFixtures(t, source.SkillDir())

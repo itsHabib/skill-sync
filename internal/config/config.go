@@ -18,11 +18,16 @@ type Config struct {
 	SourceDir string `yaml:"source_dir,omitempty"`
 
 	// Targets lists provider names to sync skills to (e.g., ["copilot", "gemini"]).
-	Targets []string `yaml:"targets"`
+	// Mutually exclusive with TargetDir.
+	Targets []string `yaml:"targets,omitempty"`
 
 	// TargetDirs optionally overrides target providers' default skill directories.
 	// Keys are provider names, values are directory paths.
 	TargetDirs map[string]string `yaml:"target_dirs,omitempty"`
+
+	// TargetDir is the path to a plain directory target (e.g., a git repo for backups).
+	// Mutually exclusive with Targets. When set, skills are synced as-is using SKILL.md format.
+	TargetDir string `yaml:"target_dir,omitempty"`
 
 	// Skills optionally restricts syncing to the named skills.
 	// An empty list means all skills are synced. Uses YAML flow style for compact inline lists.
@@ -58,30 +63,44 @@ func (c *Config) Validate(registeredNames []string) error {
 		errs = append(errs, fmt.Sprintf("unknown source provider %q", c.Source))
 	}
 
-	if len(c.Targets) == 0 {
-		errs = append(errs, "targets must have at least one entry")
+	hasTargets := len(c.Targets) > 0
+	hasTargetDir := c.TargetDir != ""
+
+	if hasTargets && hasTargetDir {
+		errs = append(errs, "targets and target_dir are mutually exclusive; use one or the other")
+	}
+	if !hasTargets && !hasTargetDir {
+		errs = append(errs, "either targets or target_dir must be specified")
 	}
 
-	for _, t := range c.Targets {
-		if !nameSet[t] {
-			errs = append(errs, fmt.Sprintf("unknown target provider %q", t))
+	if hasTargetDir {
+		// Directory mode — no provider name validation needed.
+		if len(c.TargetDirs) > 0 {
+			errs = append(errs, "target_dirs cannot be used with target_dir")
 		}
-		if t == c.Source {
-			errs = append(errs, fmt.Sprintf("source %q must not appear in targets", c.Source))
-		}
-	}
-
-	// Validate target_dirs keys reference valid targets.
-	for name := range c.TargetDirs {
-		found := false
+	} else {
+		// Provider mode — validate target names.
 		for _, t := range c.Targets {
-			if t == name {
-				found = true
-				break
+			if !nameSet[t] {
+				errs = append(errs, fmt.Sprintf("unknown target provider %q", t))
+			}
+			if t == c.Source {
+				errs = append(errs, fmt.Sprintf("source %q must not appear in targets", c.Source))
 			}
 		}
-		if !found {
-			errs = append(errs, fmt.Sprintf("target_dirs: %q is not in targets list", name))
+
+		// Validate target_dirs keys reference valid targets.
+		for name := range c.TargetDirs {
+			found := false
+			for _, t := range c.Targets {
+				if t == name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				errs = append(errs, fmt.Sprintf("target_dirs: %q is not in targets list", name))
+			}
 		}
 	}
 
@@ -89,4 +108,14 @@ func (c *Config) Validate(registeredNames []string) error {
 		return fmt.Errorf("config: validation failed: %s", strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+// NormalizeDirectoryMode converts target_dir shorthand into the standard
+// targets + target_dirs format so downstream code works unchanged.
+// Call this after Validate.
+func (c *Config) NormalizeDirectoryMode() {
+	if c.TargetDir != "" && len(c.Targets) == 0 {
+		c.Targets = []string{"directory"}
+		c.TargetDirs = map[string]string{"directory": c.TargetDir}
+	}
 }

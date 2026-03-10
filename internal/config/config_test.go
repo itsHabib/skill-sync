@@ -180,14 +180,14 @@ func TestValidate_EmptySource(t *testing.T) {
 	}
 }
 
-func TestValidate_EmptyTargets(t *testing.T) {
+func TestValidate_EmptyTargetsAndNoTargetDir(t *testing.T) {
 	cfg := &Config{
 		Source:  "claude",
 		Targets: []string{},
 	}
 	err := cfg.Validate([]string{"claude", "copilot"})
 	if err == nil {
-		t.Fatal("Validate() expected error for empty targets")
+		t.Fatal("Validate() expected error when both targets and target_dir are empty")
 	}
 }
 
@@ -203,6 +203,100 @@ func TestValidate_TargetDirsInvalidKey(t *testing.T) {
 	}
 	if got := err.Error(); !contains(got, "not in targets list") {
 		t.Errorf("error should mention 'not in targets list', got: %v", got)
+	}
+}
+
+func TestValidate_TargetDir_Valid(t *testing.T) {
+	cfg := &Config{
+		Source:    "claude",
+		TargetDir: "/some/backup/dir",
+	}
+	err := cfg.Validate([]string{"claude", "copilot"})
+	if err != nil {
+		t.Errorf("Validate() unexpected error: %v", err)
+	}
+}
+
+func TestValidate_TargetDir_MutuallyExclusive(t *testing.T) {
+	cfg := &Config{
+		Source:    "claude",
+		Targets:   []string{"copilot"},
+		TargetDir: "/some/dir",
+	}
+	err := cfg.Validate([]string{"claude", "copilot"})
+	if err == nil {
+		t.Fatal("Validate() expected error when both targets and target_dir are set")
+	}
+	if got := err.Error(); !contains(got, "mutually exclusive") {
+		t.Errorf("error should mention mutually exclusive, got: %v", got)
+	}
+}
+
+func TestValidate_TargetDir_CannotUseTargetDirs(t *testing.T) {
+	cfg := &Config{
+		Source:     "claude",
+		TargetDir:  "/some/dir",
+		TargetDirs: map[string]string{"copilot": "/other"},
+	}
+	err := cfg.Validate([]string{"claude", "copilot"})
+	if err == nil {
+		t.Fatal("Validate() expected error when target_dirs used with target_dir")
+	}
+	if got := err.Error(); !contains(got, "target_dirs cannot be used with target_dir") {
+		t.Errorf("error should mention target_dirs conflict, got: %v", got)
+	}
+}
+
+func TestNormalizeDirectoryMode(t *testing.T) {
+	cfg := &Config{
+		Source:    "claude",
+		TargetDir: "/some/backup/dir",
+	}
+	cfg.NormalizeDirectoryMode()
+
+	if len(cfg.Targets) != 1 || cfg.Targets[0] != "directory" {
+		t.Errorf("Targets = %v, want [directory]", cfg.Targets)
+	}
+	if cfg.TargetDirs["directory"] != "/some/backup/dir" {
+		t.Errorf("TargetDirs[directory] = %q, want %q", cfg.TargetDirs["directory"], "/some/backup/dir")
+	}
+}
+
+func TestNormalizeDirectoryMode_NoOp(t *testing.T) {
+	cfg := &Config{
+		Source:  "claude",
+		Targets: []string{"copilot"},
+	}
+	cfg.NormalizeDirectoryMode()
+
+	if len(cfg.Targets) != 1 || cfg.Targets[0] != "copilot" {
+		t.Errorf("Targets should be unchanged, got %v", cfg.Targets)
+	}
+}
+
+func TestLoad_WithTargetDir(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".skill-sync.yaml")
+	content := `source: claude
+target_dir: /some/backup/dir
+skills: []
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Source != "claude" {
+		t.Errorf("Source = %q, want %q", cfg.Source, "claude")
+	}
+	if cfg.TargetDir != "/some/backup/dir" {
+		t.Errorf("TargetDir = %q, want %q", cfg.TargetDir, "/some/backup/dir")
+	}
+	if len(cfg.Targets) != 0 {
+		t.Errorf("Targets = %v, want empty", cfg.Targets)
 	}
 }
 
