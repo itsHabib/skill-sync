@@ -30,6 +30,24 @@ Or skip the config file entirely:
 skill-sync sync --source claude --targets copilot,gemini
 ```
 
+### Directory Backup
+
+Sync your skills to a plain directory (e.g., a git repo) instead of a named provider:
+
+```bash
+# Sync Claude skills to a git repo for backup
+skill-sync sync --source claude --target-dir ~/dev/cc-skills
+
+# Check what's drifted
+skill-sync status --source claude --target-dir ~/dev/cc-skills
+
+# Or use a config file
+skill-sync init --source claude --target-dir ~/dev/cc-skills
+skill-sync sync
+```
+
+Skills are written as-is using the same `<name>/SKILL.md` directory format. This replaces ad-hoc `rsync` scripts with proper drift detection.
+
 ## Usage
 
 ### `skill-sync init`
@@ -174,6 +192,16 @@ targets:
 skills: []
 ```
 
+For directory backup mode, use `target_dir` instead of `targets`:
+
+```yaml
+source: claude
+target_dir: ~/dev/cc-skills
+skills: []
+```
+
+`targets` and `target_dir` are mutually exclusive.
+
 ### Directory Override Priority
 
 1. CLI flag (`--source-dir` / `--target-dir`) -- highest priority
@@ -252,6 +280,7 @@ go test -tags smoke ./tests/
 
 # Lint
 go vet ./...
+golangci-lint run ./...
 ```
 
 The codebase is structured as:
@@ -265,7 +294,7 @@ internal/
 tests/         Smoke tests
 ```
 
-When adding a new provider, register a `ProviderFactory` in an `init()` function -- it takes a `baseDir` string and returns a `Provider`. See any of the existing provider files for a one-liner example.
+When adding a new provider, register a `Factory` in an `init()` function -- it takes a `baseDir` string and returns a `Provider`. See any of the existing provider files for a one-liner example.
 
 ## License
 
