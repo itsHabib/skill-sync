@@ -10,11 +10,11 @@ import (
 
 // mockProvider implements provider.Provider with in-memory skill storage.
 type mockProvider struct {
-	name      string
-	skills    map[string]provider.Skill
-	writeErr  map[string]error // per-skill write errors
-	listErr   error            // if set, ListSkills returns this error
-	readErr   map[string]error // per-skill read errors
+	name     string
+	skills   map[string]provider.Skill
+	writeErr map[string]error // per-skill write errors
+	listErr  error            // if set, ListSkills returns this error
+	readErr  map[string]error // per-skill read errors
 }
 
 func newMockProvider(name string, skills ...provider.Skill) *mockProvider {
@@ -36,7 +36,7 @@ func (m *mockProvider) ListSkills() ([]provider.Skill, error) {
 	if m.listErr != nil {
 		return nil, m.listErr
 	}
-	var skills []provider.Skill
+	skills := make([]provider.Skill, 0, len(m.skills))
 	for _, s := range m.skills {
 		skills = append(skills, s)
 	}
@@ -74,7 +74,7 @@ func TestSync_AllSkills(t *testing.T) {
 	)
 	target := newMockProvider("target1")
 
-	engine := NewSyncEngine(source, []provider.Provider{target})
+	engine := NewEngine(source, []provider.Provider{target})
 	result, err := engine.Sync(nil, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -99,7 +99,7 @@ func TestSync_WithFilter(t *testing.T) {
 	)
 	target := newMockProvider("target1")
 
-	engine := NewSyncEngine(source, []provider.Provider{target})
+	engine := NewEngine(source, []provider.Provider{target})
 	result, err := engine.Sync([]string{"a", "b"}, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -120,7 +120,7 @@ func TestSync_EmptySource(t *testing.T) {
 	source := newMockProvider("source")
 	target := newMockProvider("target1")
 
-	engine := NewSyncEngine(source, []provider.Provider{target})
+	engine := NewEngine(source, []provider.Provider{target})
 	result, err := engine.Sync(nil, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -142,7 +142,7 @@ func TestSync_MultiTarget(t *testing.T) {
 	target1 := newMockProvider("target1")
 	target2 := newMockProvider("target2")
 
-	engine := NewSyncEngine(source, []provider.Provider{target1, target2})
+	engine := NewEngine(source, []provider.Provider{target1, target2})
 	result, err := engine.Sync(nil, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -167,7 +167,7 @@ func TestSync_WriteError(t *testing.T) {
 	target := newMockProvider("target1")
 	target.writeErr["a"] = errors.New("permission denied")
 
-	engine := NewSyncEngine(source, []provider.Provider{target})
+	engine := NewEngine(source, []provider.Provider{target})
 	result, err := engine.Sync(nil, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -187,7 +187,7 @@ func TestSync_SourceListError(t *testing.T) {
 	source.listErr = errors.New("directory not found")
 	target := newMockProvider("target1")
 
-	engine := NewSyncEngine(source, []provider.Provider{target})
+	engine := NewEngine(source, []provider.Provider{target})
 	_, err := engine.Sync(nil, true)
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -205,7 +205,7 @@ func TestSync_ReadSourceError(t *testing.T) {
 	source.readErr["a"] = errors.New("corrupt file")
 	target := newMockProvider("target1")
 
-	engine := NewSyncEngine(source, []provider.Provider{target})
+	engine := NewEngine(source, []provider.Provider{target})
 	result, err := engine.Sync(nil, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -459,7 +459,7 @@ func TestSync_EmptyTargets(t *testing.T) {
 		provider.Skill{Name: "a", Content: "content-a"},
 	)
 
-	engine := NewSyncEngine(source, nil)
+	engine := NewEngine(source, nil)
 	result, err := engine.Sync(nil, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -476,7 +476,7 @@ func TestSync_FilterNoMatch(t *testing.T) {
 	)
 	target := newMockProvider("target1")
 
-	engine := NewSyncEngine(source, []provider.Provider{target})
+	engine := NewEngine(source, []provider.Provider{target})
 	result, err := engine.Sync([]string{"nonexistent"}, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -531,7 +531,7 @@ func TestSync_LargeContent(t *testing.T) {
 	)
 	target := newMockProvider("target1")
 
-	engine := NewSyncEngine(source, []provider.Provider{target})
+	engine := NewEngine(source, []provider.Provider{target})
 	result, err := engine.Sync(nil, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -590,7 +590,7 @@ func TestSync_WriteErrorIsolation(t *testing.T) {
 	target1.writeErr["a"] = errors.New("target1 write error")
 	target2 := newMockProvider("target2")
 
-	engine := NewSyncEngine(source, []provider.Provider{target1, target2})
+	engine := NewEngine(source, []provider.Provider{target1, target2})
 	result, err := engine.Sync(nil, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

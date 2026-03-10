@@ -7,47 +7,47 @@ import (
 	"github.com/user/skill-sync/internal/provider"
 )
 
-// SyncStatus represents the outcome of syncing a single skill to a target.
-type SyncStatus string
+// Status represents the outcome of syncing a single skill to a target.
+type Status string
 
 const (
-	// SyncSuccess indicates the skill was synced successfully.
-	SyncSuccess SyncStatus = "success"
-	// SyncError indicates the skill failed to sync.
-	SyncError SyncStatus = "error"
-	// SyncSkipped indicates the skill was skipped because it already exists in the target.
-	SyncSkipped SyncStatus = "skipped"
+	// StatusSuccess indicates the skill was synced successfully.
+	StatusSuccess Status = "success"
+	// StatusError indicates the skill failed to sync.
+	StatusError Status = "error"
+	// StatusSkipped indicates the skill was skipped because it already exists in the target.
+	StatusSkipped Status = "skipped"
 )
 
-// SyncDetail records the result of syncing one skill to one target.
-type SyncDetail struct {
+// Detail records the result of syncing one skill to one target.
+type Detail struct {
 	SkillName string
 	// Target is the provider name the skill was synced to.
 	Target string
-	Status SyncStatus
-	// Error is non-nil only when Status is SyncError.
+	Status Status
+	// Error is non-nil only when Status is StatusError.
 	Error error
 }
 
-// SyncResult aggregates the outcome of a sync operation.
-type SyncResult struct {
+// Result aggregates the outcome of a sync operation.
+type Result struct {
 	TotalSynced  int
 	TotalSkipped int
 	TotalErrored int
 	// Details contains one entry per (skill, target) pair attempted.
-	Details []SyncDetail
+	Details []Detail
 }
 
-// SyncEngine orchestrates reading skills from a source provider and writing
+// Engine orchestrates reading skills from a source provider and writing
 // them to one or more target providers.
-type SyncEngine struct {
+type Engine struct {
 	source  provider.Provider
 	targets []provider.Provider
 }
 
-// NewSyncEngine creates a sync engine with a source and target providers.
-func NewSyncEngine(source provider.Provider, targets []provider.Provider) *SyncEngine {
-	return &SyncEngine{
+// NewEngine creates a sync engine with a source and target providers.
+func NewEngine(source provider.Provider, targets []provider.Provider) *Engine {
+	return &Engine{
 		source:  source,
 		targets: targets,
 	}
@@ -57,95 +57,108 @@ func NewSyncEngine(source provider.Provider, targets []provider.Provider) *SyncE
 // If skillFilter is non-empty, only skills whose names appear in the filter are synced.
 // If force is false, skills that already exist in a target are skipped.
 // Returns a fatal error only if the source ListSkills call fails.
-// Per-skill and per-target errors are captured in SyncResult.Details.
-func (e *SyncEngine) Sync(skillFilter []string, force bool) (*SyncResult, error) {
+// Per-skill and per-target errors are captured in Result.Details.
+func (e *Engine) Sync(skillFilter []string, force bool) (*Result, error) {
 	skills, err := e.source.ListSkills()
 	if err != nil {
 		return nil, fmt.Errorf("sync: list source skills: %w", err)
 	}
 
-	if len(skillFilter) > 0 {
-		filterSet := make(map[string]bool, len(skillFilter))
-		for _, name := range skillFilter {
-			filterSet[name] = true
-		}
-		filtered := skills[:0:0]
-		for _, s := range skills {
-			if filterSet[s.Name] {
-				filtered = append(filtered, s)
-			}
-		}
-		skills = filtered
-	}
-
-	// Pre-load existing skill names per target for skip-existing behavior.
-	targetExisting := make(map[string]map[string]bool, len(e.targets))
-	if !force {
-		for _, target := range e.targets {
-			existing, listErr := target.ListSkills()
-			if listErr != nil {
-				// If we can't list, treat as empty (will attempt writes).
-				targetExisting[target.Name()] = map[string]bool{}
-				continue
-			}
-			nameSet := make(map[string]bool, len(existing))
-			for _, s := range existing {
-				nameSet[s.Name] = true
-			}
-			targetExisting[target.Name()] = nameSet
-		}
-	}
-
-	result := &SyncResult{}
+	skills = filterSkills(skills, skillFilter)
+	existing := e.loadExisting(force)
+	result := &Result{}
 
 	for _, skill := range skills {
-		full, err := e.source.ReadSkill(skill.Name)
-		if err != nil {
-			for _, target := range e.targets {
-				detail := SyncDetail{
-					SkillName: skill.Name,
-					Target:    target.Name(),
-					Status:    SyncError,
-					Error:     fmt.Errorf("sync: read source skill %q: %w", skill.Name, err),
-				}
-				result.Details = append(result.Details, detail)
-				result.TotalErrored++
-			}
+		full, readErr := e.source.ReadSkill(skill.Name)
+		if readErr != nil {
+			e.recordReadError(result, skill.Name, readErr)
 			continue
 		}
-
 		for _, target := range e.targets {
-			// Skip if target already has this skill and force is off.
-			if !force {
-				if existing, ok := targetExisting[target.Name()]; ok && existing[skill.Name] {
-					result.Details = append(result.Details, SyncDetail{
-						SkillName: skill.Name,
-						Target:    target.Name(),
-						Status:    SyncSkipped,
-					})
-					result.TotalSkipped++
-					continue
-				}
-			}
-
-			if writeErr := target.WriteSkill(*full); writeErr != nil {
-				result.Details = append(result.Details, SyncDetail{
-					SkillName: skill.Name,
-					Target:    target.Name(),
-					Status:    SyncError,
-					Error:     fmt.Errorf("sync: write skill %q to %q: %w", skill.Name, target.Name(), writeErr),
-				})
-				result.TotalErrored++
-			} else {
-				result.Details = append(result.Details, SyncDetail{
-					SkillName: skill.Name,
-					Target:    target.Name(),
-					Status:    SyncSuccess,
-				})
-				result.TotalSynced++
-			}
+			e.syncSkillToTarget(result, *full, target, existing, force)
 		}
 	}
 
 	return result, nil
+}
+
+func filterSkills(skills []provider.Skill, filter []string) []provider.Skill {
+	if len(filter) == 0 {
+		return skills
+	}
+	filterSet := make(map[string]bool, len(filter))
+	for _, name := range filter {
+		filterSet[name] = true
+	}
+	filtered := skills[:0:0]
+	for _, s := range skills {
+		if filterSet[s.Name] {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
+}
+
+func (e *Engine) loadExisting(force bool) map[string]map[string]bool {
+	existing := make(map[string]map[string]bool, len(e.targets))
+	if force {
+		return existing
+	}
+	for _, target := range e.targets {
+		skills, err := target.ListSkills()
+		if err != nil {
+			existing[target.Name()] = map[string]bool{}
+			continue
+		}
+		nameSet := make(map[string]bool, len(skills))
+		for _, s := range skills {
+			nameSet[s.Name] = true
+		}
+		existing[target.Name()] = nameSet
+	}
+	return existing
+}
+
+func (e *Engine) recordReadError(result *Result, skillName string, err error) {
+	for _, target := range e.targets {
+		result.Details = append(result.Details, Detail{
+			SkillName: skillName,
+			Target:    target.Name(),
+			Status:    StatusError,
+			Error:     fmt.Errorf("sync: read source skill %q: %w", skillName, err),
+		})
+		result.TotalErrored++
+	}
+}
+
+func (e *Engine) syncSkillToTarget(result *Result, skill provider.Skill, target provider.Provider, existing map[string]map[string]bool, force bool) {
+	if !force {
+		if names, ok := existing[target.Name()]; ok && names[skill.Name] {
+			result.Details = append(result.Details, Detail{
+				SkillName: skill.Name,
+				Target:    target.Name(),
+				Status:    StatusSkipped,
+			})
+			result.TotalSkipped++
+			return
+		}
+	}
+
+	if writeErr := target.WriteSkill(skill); writeErr != nil {
+		result.Details = append(result.Details, Detail{
+			SkillName: skill.Name,
+			Target:    target.Name(),
+			Status:    StatusError,
+			Error:     fmt.Errorf("sync: write skill %q to %q: %w", skill.Name, target.Name(), writeErr),
+		})
+		result.TotalErrored++
+		return
+	}
+
+	result.Details = append(result.Details, Detail{
+		SkillName: skill.Name,
+		Target:    target.Name(),
+		Status:    StatusSuccess,
+	})
+	result.TotalSynced++
 }

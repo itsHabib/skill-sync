@@ -10,12 +10,13 @@ import (
 )
 
 var (
-	cfgPath       string
+	cfgPath string
+	// Cfg holds the resolved configuration used by all subcommands.
 	Cfg           *config.Config
-	InlineSource  string
-	InlineTargets []string
-	SourceDir     string
-	TargetDir     string
+	inlineSource  string
+	inlineTargets []string
+	sourceDir     string
+	targetDir     string
 )
 
 var rootCmd = &cobra.Command{
@@ -44,7 +45,7 @@ keep all your providers in lockstep.`,
 
   # Override target directory (single target only)
   skill-sync sync --source claude --targets copilot --target-dir /path/to/skills`,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 		if cmd.Name() == "init" {
 			return nil
 		}
@@ -52,7 +53,7 @@ keep all your providers in lockstep.`,
 		var cfg *config.Config
 		var err error
 
-		if InlineSource != "" {
+		if inlineSource != "" {
 			cfg, err = buildConfigFromFlags()
 		} else {
 			cfg, err = loadConfigFromFile()
@@ -69,36 +70,36 @@ keep all your providers in lockstep.`,
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgPath, "config", ".skill-sync.yaml", "path to config file")
-	rootCmd.PersistentFlags().StringVar(&InlineSource, "source", "", "source provider to read skills from (overrides config file)")
-	rootCmd.PersistentFlags().StringSliceVar(&InlineTargets, "targets", nil, "target providers to sync skills to (overrides config file)")
-	rootCmd.PersistentFlags().StringVar(&SourceDir, "source-dir", "", "override source provider skill directory")
-	rootCmd.PersistentFlags().StringVar(&TargetDir, "target-dir", "", "target directory path; use alone for directory mode or with --targets to override a single target's dir")
+	rootCmd.PersistentFlags().StringVar(&inlineSource, "source", "", "source provider to read skills from (overrides config file)")
+	rootCmd.PersistentFlags().StringSliceVar(&inlineTargets, "targets", nil, "target providers to sync skills to (overrides config file)")
+	rootCmd.PersistentFlags().StringVar(&sourceDir, "source-dir", "", "override source provider skill directory")
+	rootCmd.PersistentFlags().StringVar(&targetDir, "target-dir", "", "target directory path; use alone for directory mode or with --targets to override a single target's dir")
 }
 
 // buildConfigFromFlags creates a Config from CLI flags (--source, --targets, --target-dir).
 func buildConfigFromFlags() (*config.Config, error) {
-	if len(InlineTargets) == 0 && TargetDir == "" {
+	if len(inlineTargets) == 0 && targetDir == "" {
 		return nil, fmt.Errorf("--targets or --target-dir is required when using --source. Example: --source claude --targets copilot,gemini")
 	}
 
 	cfg := &config.Config{
-		Source:    InlineSource,
-		SourceDir: SourceDir,
+		Source:    inlineSource,
+		SourceDir: sourceDir,
 	}
 
 	// Directory mode: --source claude --target-dir ~/backup
-	if TargetDir != "" && len(InlineTargets) == 0 {
-		cfg.TargetDir = TargetDir
+	if targetDir != "" && len(inlineTargets) == 0 {
+		cfg.TargetDir = targetDir
 	} else {
-		cfg.Targets = InlineTargets
+		cfg.Targets = inlineTargets
 	}
 
 	// --target-dir as single-target override: --targets copilot --target-dir /path
-	if TargetDir != "" && len(InlineTargets) > 0 {
-		if len(InlineTargets) > 1 {
-			return nil, fmt.Errorf("--target-dir can only be used with a single target (got %d targets)", len(InlineTargets))
+	if targetDir != "" && len(inlineTargets) > 0 {
+		if len(inlineTargets) > 1 {
+			return nil, fmt.Errorf("--target-dir can only be used with a single target (got %d targets)", len(inlineTargets))
 		}
-		cfg.TargetDirs = map[string]string{InlineTargets[0]: TargetDir}
+		cfg.TargetDirs = map[string]string{inlineTargets[0]: targetDir}
 	}
 
 	if err := cfg.Validate(provider.List()); err != nil {
@@ -117,25 +118,25 @@ func loadConfigFromFile() (*config.Config, error) {
 		return nil, fmt.Errorf("validating config: %w", err)
 	}
 
-	if SourceDir != "" {
-		cfg.SourceDir = SourceDir
+	if sourceDir != "" {
+		cfg.SourceDir = sourceDir
 	}
 
-	if err := applyTargetDirOverride(cfg); err != nil {
+	if err := applytargetDirOverride(cfg); err != nil {
 		return nil, err
 	}
 	return cfg, nil
 }
 
-// applyTargetDirOverride applies the --target-dir CLI flag to a file-loaded config.
-func applyTargetDirOverride(cfg *config.Config) error {
-	if TargetDir == "" {
+// applytargetDirOverride applies the --target-dir CLI flag to a file-loaded config.
+func applytargetDirOverride(cfg *config.Config) error {
+	if targetDir == "" {
 		return nil
 	}
 
 	// Directory mode: override the path.
 	if cfg.TargetDir != "" {
-		cfg.TargetDir = TargetDir
+		cfg.TargetDir = targetDir
 		return nil
 	}
 
@@ -146,10 +147,11 @@ func applyTargetDirOverride(cfg *config.Config) error {
 	if cfg.TargetDirs == nil {
 		cfg.TargetDirs = make(map[string]string)
 	}
-	cfg.TargetDirs[cfg.Targets[0]] = TargetDir
+	cfg.TargetDirs[cfg.Targets[0]] = targetDir
 	return nil
 }
 
+// Execute runs the root command.
 func Execute() {
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 	if err := rootCmd.Execute(); err != nil {

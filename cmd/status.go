@@ -35,7 +35,7 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 }
 
-func runStatus(cmd *cobra.Command, args []string) error {
+func runStatus(cmd *cobra.Command, _ []string) error {
 	source, targets, err := resolveProviders(Cfg)
 	if err != nil {
 		return fmt.Errorf("status: %w", err)

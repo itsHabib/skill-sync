@@ -12,12 +12,12 @@ import (
 
 // mockProvider implements provider.Provider for testing.
 type mockProvider struct {
-	name      string
-	skills    []provider.Skill
-	readMap   map[string]*provider.Skill
-	writeErr  error
-	listErr   error
-	written   []provider.Skill
+	name     string
+	skills   []provider.Skill
+	readMap  map[string]*provider.Skill
+	writeErr error
+	listErr  error
+	written  []provider.Skill
 }
 
 func (m *mockProvider) Name() string { return m.name }
@@ -59,9 +59,9 @@ func newMockSource(skills ...provider.Skill) *mockProvider {
 	}
 }
 
-func newMockTarget(name string) *mockProvider {
+func newMockTarget() *mockProvider {
 	return &mockProvider{
-		name:    name,
+		name:    "copilot",
 		readMap: make(map[string]*provider.Skill),
 	}
 }
@@ -71,9 +71,9 @@ func TestSyncAllSkills(t *testing.T) {
 		provider.Skill{Name: "deploy", Content: "deploy content"},
 		provider.Skill{Name: "review", Content: "review content"},
 	)
-	target := newMockTarget("copilot")
+	target := newMockTarget()
 
-	engine := sync.NewSyncEngine(source, []provider.Provider{target})
+	engine := sync.NewEngine(source, []provider.Provider{target})
 
 	var buf bytes.Buffer
 	err := doSync(&buf, engine, nil, true)
@@ -100,7 +100,7 @@ func TestSyncDryRun(t *testing.T) {
 	source := newMockSource(
 		provider.Skill{Name: "deploy", Content: "deploy content"},
 	)
-	target := newMockTarget("copilot")
+	target := newMockTarget()
 
 	var buf bytes.Buffer
 	err := doSyncDryRun(&buf, source, []provider.Provider{target}, nil)
@@ -123,9 +123,9 @@ func TestSyncWithSkillFilter(t *testing.T) {
 		provider.Skill{Name: "review", Content: "review content"},
 		provider.Skill{Name: "build", Content: "build content"},
 	)
-	target := newMockTarget("copilot")
+	target := newMockTarget()
 
-	engine := sync.NewSyncEngine(source, []provider.Provider{target})
+	engine := sync.NewEngine(source, []provider.Provider{target})
 
 	var buf bytes.Buffer
 	err := doSync(&buf, engine, []string{"deploy"}, true)
@@ -155,7 +155,7 @@ func TestSyncWithWriteErrors(t *testing.T) {
 		readMap:  make(map[string]*provider.Skill),
 	}
 
-	engine := sync.NewSyncEngine(source, []provider.Provider{target})
+	engine := sync.NewEngine(source, []provider.Provider{target})
 
 	var buf bytes.Buffer
 	err := doSync(&buf, engine, nil, true)
@@ -174,9 +174,9 @@ func TestSyncWithWriteErrors(t *testing.T) {
 
 func TestSyncEmptySource(t *testing.T) {
 	source := newMockSource()
-	target := newMockTarget("copilot")
+	target := newMockTarget()
 
-	engine := sync.NewSyncEngine(source, []provider.Provider{target})
+	engine := sync.NewEngine(source, []provider.Provider{target})
 
 	var buf bytes.Buffer
 	err := doSync(&buf, engine, nil, true)
@@ -195,7 +195,7 @@ func TestSyncDryRunWithFilter(t *testing.T) {
 		provider.Skill{Name: "deploy", Content: "deploy content"},
 		provider.Skill{Name: "review", Content: "review content"},
 	)
-	target := newMockTarget("copilot")
+	target := newMockTarget()
 
 	var buf bytes.Buffer
 	err := doSyncDryRun(&buf, source, []provider.Provider{target}, []string{"deploy"})

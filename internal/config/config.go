@@ -56,13 +56,26 @@ func (c *Config) Validate(registeredNames []string) error {
 	}
 
 	var errs []string
+	errs = c.validateSource(errs, nameSet)
+	errs = c.validateTargets(errs, nameSet)
 
-	if c.Source == "" {
-		errs = append(errs, "source must not be empty")
-	} else if !nameSet[c.Source] {
-		errs = append(errs, fmt.Sprintf("unknown source provider %q", c.Source))
+	if len(errs) > 0 {
+		return fmt.Errorf("config: validation failed: %s", strings.Join(errs, "; "))
 	}
+	return nil
+}
 
+func (c *Config) validateSource(errs []string, nameSet map[string]bool) []string {
+	if c.Source == "" {
+		return append(errs, "source must not be empty")
+	}
+	if !nameSet[c.Source] {
+		return append(errs, fmt.Sprintf("unknown source provider %q", c.Source))
+	}
+	return errs
+}
+
+func (c *Config) validateTargets(errs []string, nameSet map[string]bool) []string {
 	hasTargets := len(c.Targets) > 0
 	hasTargetDir := c.TargetDir != ""
 
@@ -74,40 +87,36 @@ func (c *Config) Validate(registeredNames []string) error {
 	}
 
 	if hasTargetDir {
-		// Directory mode — no provider name validation needed.
-		if len(c.TargetDirs) > 0 {
-			errs = append(errs, "target_dirs cannot be used with target_dir")
-		}
-	} else {
-		// Provider mode — validate target names.
-		for _, t := range c.Targets {
-			if !nameSet[t] {
-				errs = append(errs, fmt.Sprintf("unknown target provider %q", t))
-			}
-			if t == c.Source {
-				errs = append(errs, fmt.Sprintf("source %q must not appear in targets", c.Source))
-			}
-		}
+		return c.validateDirectoryMode(errs)
+	}
+	return c.validateProviderMode(errs, nameSet)
+}
 
-		// Validate target_dirs keys reference valid targets.
-		for name := range c.TargetDirs {
-			found := false
-			for _, t := range c.Targets {
-				if t == name {
-					found = true
-					break
-				}
-			}
-			if !found {
-				errs = append(errs, fmt.Sprintf("target_dirs: %q is not in targets list", name))
-			}
+func (c *Config) validateDirectoryMode(errs []string) []string {
+	if len(c.TargetDirs) > 0 {
+		errs = append(errs, "target_dirs cannot be used with target_dir")
+	}
+	return errs
+}
+
+func (c *Config) validateProviderMode(errs []string, nameSet map[string]bool) []string {
+	targetSet := make(map[string]bool, len(c.Targets))
+	for _, t := range c.Targets {
+		targetSet[t] = true
+		if !nameSet[t] {
+			errs = append(errs, fmt.Sprintf("unknown target provider %q", t))
+		}
+		if t == c.Source {
+			errs = append(errs, fmt.Sprintf("source %q must not appear in targets", c.Source))
 		}
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("config: validation failed: %s", strings.Join(errs, "; "))
+	for name := range c.TargetDirs {
+		if !targetSet[name] {
+			errs = append(errs, fmt.Sprintf("target_dirs: %q is not in targets list", name))
+		}
 	}
-	return nil
+	return errs
 }
 
 // NormalizeDirectoryMode converts target_dir shorthand into the standard

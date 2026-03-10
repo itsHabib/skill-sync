@@ -6,19 +6,19 @@ import (
 	"sync"
 )
 
-// ProviderFactory creates a Provider with the given base directory.
+// Factory creates a Provider with the given base directory.
 // If baseDir is empty, the provider uses its default directory.
-type ProviderFactory func(baseDir string) Provider
+type Factory func(baseDir string) Provider
 
 var (
 	mu       sync.RWMutex
-	registry = make(map[string]ProviderFactory)
+	registry = make(map[string]Factory)
 )
 
 // Register adds a provider factory to the global registry.
 // It panics if a provider with the same name is already registered.
 // This is intended to be called from provider packages' init() functions.
-func Register(name string, factory ProviderFactory) {
+func Register(name string, factory Factory) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, exists := registry[name]; exists {
@@ -60,5 +60,5 @@ func List() []string {
 func resetRegistry() {
 	mu.Lock()
 	defer mu.Unlock()
-	registry = make(map[string]ProviderFactory)
+	registry = make(map[string]Factory)
 }

@@ -172,6 +172,8 @@ func (e *DiffEngine) Diff(targetName string) (*DetailedDiff, error) {
 
 // unifiedDiff produces a unified diff string between two texts.
 // Uses a simple line-by-line comparison with context lines.
+//
+//nolint:gocognit,gocyclo,funlen // Algorithmic complexity is inherent to diff generation.
 func unifiedDiff(name, a, b string) string {
 	aLines := splitLines(a)
 	bLines := splitLines(b)
@@ -348,10 +350,8 @@ func computeLCS(a, b []string) [][]int {
 		for j := 1; j <= n; j++ {
 			if a[i-1] == b[j-1] {
 				table[i][j] = table[i-1][j-1] + 1
-			} else if table[i-1][j] >= table[i][j-1] {
-				table[i][j] = table[i-1][j]
 			} else {
-				table[i][j] = table[i][j-1]
+				table[i][j] = max(table[i-1][j], table[i][j-1])
 			}
 		}
 	}

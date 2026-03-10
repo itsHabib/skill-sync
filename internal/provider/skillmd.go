@@ -23,7 +23,10 @@ type skillMDProvider struct {
 	baseDir      string
 }
 
-func (p *skillMDProvider) Name() string    { return p.providerName }
+// Name returns the provider's identifier.
+func (p *skillMDProvider) Name() string { return p.providerName }
+
+// SkillDir returns the base directory for skills.
 func (p *skillMDProvider) SkillDir() string { return p.baseDir }
 
 // ListSkills scans baseDir for subdirectories containing SKILL.md.
@@ -33,7 +36,7 @@ func (p *skillMDProvider) ListSkills() ([]Skill, error) {
 		return nil, fmt.Errorf("%s: read skill directory: %w", p.providerName, err)
 	}
 
-	var skills []Skill
+	skills := make([]Skill, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -48,9 +51,6 @@ func (p *skillMDProvider) ListSkills() ([]Skill, error) {
 			return nil, fmt.Errorf("%s: list skills: %w", p.providerName, err)
 		}
 		skills = append(skills, *skill)
-	}
-	if skills == nil {
-		return []Skill{}, nil
 	}
 	return skills, nil
 }

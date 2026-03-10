@@ -89,8 +89,12 @@ func TestListSkills_SkipsDirsWithoutSkillMD(t *testing.T) {
 	dir := t.TempDir()
 	writeTestSkill(t, dir, "real", "# Real skill\nContent")
 	// Create a directory without SKILL.md
-	os.MkdirAll(filepath.Join(dir, "not-a-skill"), 0755)
-	os.WriteFile(filepath.Join(dir, "not-a-skill", "README.md"), []byte("not a skill"), 0644)
+	if err := os.MkdirAll(filepath.Join(dir, "not-a-skill"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "not-a-skill", "README.md"), []byte("not a skill"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	p := newTestProvider("claude", dir)
 	skills, err := p.ListSkills()

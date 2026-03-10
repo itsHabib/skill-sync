@@ -47,7 +47,7 @@ func init() {
 	rootCmd.AddCommand(syncCmd)
 }
 
-func runSync(cmd *cobra.Command, args []string) error {
+func runSync(cmd *cobra.Command, _ []string) error {
 	source, targets, err := resolveProviders(Cfg)
 	if err != nil {
 		return fmt.Errorf("sync: %w", err)
@@ -59,7 +59,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return doSyncDryRun(w, source, targets, syncSkills)
 	}
 
-	engine := sync.NewSyncEngine(source, targets)
+	engine := sync.NewEngine(source, targets)
 	if err := doSync(w, engine, syncSkills, syncForce); err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func doSyncDryRun(w io.Writer, source provider.Provider, targets []provider.Prov
 	return nil
 }
 
-func doSync(w io.Writer, engine *sync.SyncEngine, skillFilter []string, force bool) error {
+func doSync(w io.Writer, engine *sync.Engine, skillFilter []string, force bool) error {
 	result, err := engine.Sync(skillFilter, force)
 	if err != nil {
 		return fmt.Errorf("sync: %w", err)
@@ -119,11 +119,14 @@ func doSync(w io.Writer, engine *sync.SyncEngine, skillFilter []string, force bo
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "SKILL\tTARGET\tSTATUS")
 	for _, d := range result.Details {
-		status := "synced"
-		if d.Status == sync.SyncError {
+		var status string
+		switch d.Status {
+		case sync.StatusError:
 			status = fmt.Sprintf("error: %v", d.Error)
-		} else if d.Status == sync.SyncSkipped {
+		case sync.StatusSkipped:
 			status = "skipped (exists)"
+		default:
+			status = "synced"
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\n", d.SkillName, d.Target, status)
 	}

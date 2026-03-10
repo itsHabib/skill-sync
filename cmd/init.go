@@ -35,11 +35,11 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 }
 
-func runInit(cmd *cobra.Command, args []string) error {
-	if InlineSource == "" {
+func runInit(cmd *cobra.Command, _ []string) error {
+	if inlineSource == "" {
 		return fmt.Errorf("--source is required. Specify your source provider: skill-sync init --source claude --targets copilot,gemini")
 	}
-	if len(InlineTargets) == 0 && TargetDir == "" {
+	if len(inlineTargets) == 0 && targetDir == "" {
 		return fmt.Errorf("--targets or --target-dir is required. Examples:\n  skill-sync init --source claude --targets copilot,gemini\n  skill-sync init --source claude --target-dir ~/dev/cc-skills")
 	}
 
@@ -51,13 +51,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Build config from flags
 	registered := provider.List()
 	cfg := &config.Config{
-		Source: InlineSource,
+		Source: inlineSource,
 		Skills: []string{},
 	}
-	if TargetDir != "" && len(InlineTargets) == 0 {
-		cfg.TargetDir = TargetDir
+	if targetDir != "" && len(inlineTargets) == 0 {
+		cfg.TargetDir = targetDir
 	} else {
-		cfg.Targets = InlineTargets
+		cfg.Targets = inlineTargets
 	}
 	if err := cfg.Validate(registered); err != nil {
 		return fmt.Errorf("init: %w", err)

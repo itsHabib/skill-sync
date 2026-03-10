@@ -71,7 +71,7 @@ func TestSmoke_FullFlow(t *testing.T) {
 	copyFixtures(t, source.SkillDir())
 
 	// -- Phase 2: Sync all skills --
-	syncEng := sync.NewSyncEngine(source, targets)
+	syncEng := sync.NewEngine(source, targets)
 	result, err := syncEng.Sync(nil, true)
 	if err != nil {
 		t.Fatalf("Phase 2: Sync failed: %v", err)
@@ -211,7 +211,7 @@ func TestSmoke_DirectoryMode(t *testing.T) {
 	copyFixtures(t, source.SkillDir())
 
 	// -- Sync all skills to directory --
-	syncEng := sync.NewSyncEngine(source, targets)
+	syncEng := sync.NewEngine(source, targets)
 	result, syncErr := syncEng.Sync(nil, true)
 	if syncErr != nil {
 		t.Fatalf("Sync to directory failed: %v", syncErr)
@@ -287,7 +287,7 @@ func TestSmoke_SkillFilter(t *testing.T) {
 	source, targets, copilotDir, geminiDir := setupProviders(t)
 	copyFixtures(t, source.SkillDir())
 
-	syncEng := sync.NewSyncEngine(source, targets)
+	syncEng := sync.NewEngine(source, targets)
 	result, err := syncEng.Sync([]string{"deploy"}, true)
 	if err != nil {
 		t.Fatalf("Sync with filter failed: %v", err)
