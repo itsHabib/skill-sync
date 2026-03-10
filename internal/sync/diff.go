@@ -211,8 +211,8 @@ func unifiedDiff(name, a, b string) string {
 	// Generate unified diff with 3 lines of context
 	const contextLines = 3
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("--- a/%s\n", name))
-	sb.WriteString(fmt.Sprintf("+++ b/%s\n", name))
+	fmt.Fprintf(&sb, "--- a/%s\n", name)
+	fmt.Fprintf(&sb, "+++ b/%s\n", name)
 
 	// Find hunks: groups of changes with context
 	type hunk struct {
@@ -309,7 +309,7 @@ func unifiedDiff(name, a, b string) string {
 	}
 
 	for _, h := range hunks {
-		sb.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", h.startA, h.countA, h.startB, h.countB))
+		fmt.Fprintf(&sb, "@@ -%d,%d +%d,%d @@\n", h.startA, h.countA, h.startB, h.countB)
 		for _, e := range h.lines {
 			switch e.op {
 			case '=':
