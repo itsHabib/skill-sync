@@ -300,6 +300,31 @@ skills: []
 	}
 }
 
+func TestValidate_DirectorySourceWithSourceDir(t *testing.T) {
+	cfg := &Config{
+		Source:    "directory",
+		SourceDir: "/some/source/dir",
+		TargetDir: "/some/target/dir",
+	}
+	err := cfg.Validate([]string{"claude", "copilot", "directory"})
+	if err != nil {
+		t.Errorf("Validate() unexpected error for directory source with source_dir: %v", err)
+	}
+}
+
+func TestValidate_DirectorySourceWithoutSourceDir(t *testing.T) {
+	cfg := &Config{
+		Source:    "directory",
+		TargetDir: "/some/target/dir",
+	}
+	// "directory" is a registered provider, so this should still pass
+	// via the normal provider check (it's in the nameSet).
+	err := cfg.Validate([]string{"claude", "copilot", "directory"})
+	if err != nil {
+		t.Errorf("Validate() unexpected error: %v", err)
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && containsSubstr(s, substr)
 }

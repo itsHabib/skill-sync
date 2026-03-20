@@ -69,6 +69,10 @@ func (c *Config) validateSource(errs []string, nameSet map[string]bool) []string
 	if c.Source == "" {
 		return append(errs, "source must not be empty")
 	}
+	// "directory" is a virtual provider for pure dir-to-dir mode (--source-dir + --target-dir).
+	if c.Source == "directory" && c.SourceDir != "" {
+		return errs
+	}
 	if !nameSet[c.Source] {
 		return append(errs, fmt.Sprintf("unknown source provider %q", c.Source))
 	}

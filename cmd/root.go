@@ -53,7 +53,7 @@ keep all your providers in lockstep.`,
 		var cfg *config.Config
 		var err error
 
-		if inlineSource != "" {
+		if inlineSource != "" || (sourceDir != "" && targetDir != "") {
 			cfg, err = buildConfigFromFlags()
 		} else {
 			cfg, err = loadConfigFromFile()
@@ -76,14 +76,20 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&targetDir, "target-dir", "", "target directory path; use alone for directory mode or with --targets to override a single target's dir")
 }
 
-// buildConfigFromFlags creates a Config from CLI flags (--source, --targets, --target-dir).
+// buildConfigFromFlags creates a Config from CLI flags (--source, --targets, --target-dir, --source-dir).
 func buildConfigFromFlags() (*config.Config, error) {
 	if len(inlineTargets) == 0 && targetDir == "" {
 		return nil, fmt.Errorf("--targets or --target-dir is required when using --source. Example: --source claude --targets copilot,gemini")
 	}
 
+	// Pure directory mode: --source-dir + --target-dir, no provider names needed.
+	source := inlineSource
+	if source == "" && sourceDir != "" {
+		source = "directory"
+	}
+
 	cfg := &config.Config{
-		Source:    inlineSource,
+		Source:    source,
 		SourceDir: sourceDir,
 	}
 
