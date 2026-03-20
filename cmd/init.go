@@ -39,7 +39,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	if inlineSource == "" {
 		return fmt.Errorf("--source is required. Specify your source provider: skill-sync init --source claude --targets copilot,gemini")
 	}
-	if len(inlineTargets) == 0 && targetDir == "" {
+	if len(inlineTargets) == 0 && firstTargetDir() == "" {
 		return fmt.Errorf("--targets or --target-dir is required. Examples:\n  skill-sync init --source claude --targets copilot,gemini\n  skill-sync init --source claude --target-dir ~/dev/cc-skills")
 	}
 
@@ -54,8 +54,8 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		Source: inlineSource,
 		Skills: []string{},
 	}
-	if targetDir != "" && len(inlineTargets) == 0 {
-		cfg.TargetDir = targetDir
+	if firstTargetDir() != "" && len(inlineTargets) == 0 {
+		cfg.TargetDir = firstTargetDir()
 	} else {
 		cfg.Targets = inlineTargets
 	}

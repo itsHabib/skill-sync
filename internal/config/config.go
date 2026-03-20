@@ -29,6 +29,10 @@ type Config struct {
 	// Mutually exclusive with Targets. When set, skills are synced as-is using SKILL.md format.
 	TargetDir string `yaml:"target_dir,omitempty"`
 
+	// TargetDirList holds multiple directory targets from repeated --target-dir flags.
+	// Mutually exclusive with Targets and TargetDir. Populated by CLI flags, not config files.
+	TargetDirList []string `yaml:"-"`
+
 	// Skills optionally restricts syncing to the named skills.
 	// An empty list means all skills are synced. Uses YAML flow style for compact inline lists.
 	Skills []string `yaml:"skills,flow"`
@@ -82,14 +86,30 @@ func (c *Config) validateSource(errs []string, nameSet map[string]bool) []string
 func (c *Config) validateTargets(errs []string, nameSet map[string]bool) []string {
 	hasTargets := len(c.Targets) > 0
 	hasTargetDir := c.TargetDir != ""
+	hasTargetDirList := len(c.TargetDirList) > 0
 
-	if hasTargets && hasTargetDir {
-		errs = append(errs, "targets and target_dir are mutually exclusive; use one or the other")
+	// Count how many target mechanisms are set.
+	setCount := 0
+	if hasTargets {
+		setCount++
 	}
-	if !hasTargets && !hasTargetDir {
+	if hasTargetDir {
+		setCount++
+	}
+	if hasTargetDirList {
+		setCount++
+	}
+
+	if setCount > 1 {
+		errs = append(errs, "targets, target_dir, and multiple --target-dir flags are mutually exclusive; use one")
+	}
+	if setCount == 0 {
 		errs = append(errs, "either targets or target_dir must be specified")
 	}
 
+	if hasTargetDirList {
+		return errs // no further validation needed for dir list
+	}
 	if hasTargetDir {
 		return c.validateDirectoryMode(errs)
 	}
@@ -123,10 +143,20 @@ func (c *Config) validateProviderMode(errs []string, nameSet map[string]bool) []
 	return errs
 }
 
-// NormalizeDirectoryMode converts target_dir shorthand into the standard
-// targets + target_dirs format so downstream code works unchanged.
+// NormalizeDirectoryMode converts target_dir / target_dir_list shorthand into
+// the standard targets + target_dirs format so downstream code works unchanged.
 // Call this after Validate.
 func (c *Config) NormalizeDirectoryMode() {
+	if len(c.TargetDirList) > 0 && len(c.Targets) == 0 {
+		c.Targets = make([]string, len(c.TargetDirList))
+		c.TargetDirs = make(map[string]string, len(c.TargetDirList))
+		for i, dir := range c.TargetDirList {
+			name := dir // use the path itself as the display name
+			c.Targets[i] = name
+			c.TargetDirs[name] = dir
+		}
+		return
+	}
 	if c.TargetDir != "" && len(c.Targets) == 0 {
 		c.Targets = []string{"directory"}
 		c.TargetDirs = map[string]string{"directory": c.TargetDir}

@@ -24,7 +24,14 @@ func resolveProviders(cfg *config.Config) (provider.Provider, []provider.Provide
 		if cfg.TargetDirs != nil {
 			dir = cfg.TargetDirs[name]
 		}
-		t, err := provider.New(name, dir)
+		// If the target name is a directory path (from multi --target-dir),
+		// resolve it as a "directory" provider using the path as the display name.
+		var t provider.Provider
+		if dir != "" && !provider.IsRegistered(name) {
+			t, err = provider.NewWithDisplayName("directory", dir, name)
+		} else {
+			t, err = provider.New(name, dir)
+		}
 		if err != nil {
 			return nil, nil, fmt.Errorf("unknown target provider %q. Available providers: %s", name, available)
 		}

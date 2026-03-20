@@ -39,9 +39,32 @@ func New(name, baseDir string) (Provider, error) {
 	return factory(baseDir), nil
 }
 
+// NewWithDisplayName creates a provider by name with a custom display name.
+// Useful for multiple directory targets that share the "directory" provider
+// but need distinct names in output.
+func NewWithDisplayName(providerName, baseDir, displayName string) (Provider, error) {
+	p, err := New(providerName, baseDir)
+	if err != nil {
+		return nil, err
+	}
+	// If the underlying provider supports renaming, apply the display name.
+	if smd, ok := p.(*skillMDProvider); ok {
+		smd.providerName = displayName
+	}
+	return p, nil
+}
+
 // Get returns a provider with its default base directory.
 func Get(name string) (Provider, error) {
 	return New(name, "")
+}
+
+// IsRegistered reports whether a provider with the given name is registered.
+func IsRegistered(name string) bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	_, ok := registry[name]
+	return ok
 }
 
 // List returns the names of all registered providers, sorted alphabetically.

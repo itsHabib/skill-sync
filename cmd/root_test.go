@@ -4,24 +4,28 @@ import (
 	"testing"
 )
 
-func TestBuildConfigFromFlags_PureDirectoryMode(t *testing.T) {
-	// Save and restore package-level vars.
+// saveAndRestore saves the package-level flag vars and restores them on cleanup.
+func saveAndRestore(t *testing.T) {
+	t.Helper()
 	origSource := inlineSource
 	origTargets := inlineTargets
 	origSourceDir := sourceDir
-	origTargetDir := targetDir
+	origTargetDirFlags := targetDirFlags
 	t.Cleanup(func() {
 		inlineSource = origSource
 		inlineTargets = origTargets
 		sourceDir = origSourceDir
-		targetDir = origTargetDir
+		targetDirFlags = origTargetDirFlags
 	})
+}
 
-	// Simulate: skill-sync status --source-dir /a --target-dir /b
+func TestBuildConfigFromFlags_PureDirectoryMode(t *testing.T) {
+	saveAndRestore(t)
+
 	inlineSource = ""
 	inlineTargets = nil
 	sourceDir = "/some/source"
-	targetDir = "/some/target"
+	targetDirFlags = []string{"/some/target"}
 
 	cfg, err := buildConfigFromFlags()
 	if err != nil {
@@ -34,28 +38,53 @@ func TestBuildConfigFromFlags_PureDirectoryMode(t *testing.T) {
 	if cfg.SourceDir != "/some/source" {
 		t.Errorf("SourceDir = %q, want %q", cfg.SourceDir, "/some/source")
 	}
-	if cfg.TargetDir != "/some/target" {
-		t.Errorf("TargetDir = %q, want %q", cfg.TargetDir, "/some/target")
+	if len(cfg.TargetDirList) != 1 || cfg.TargetDirList[0] != "/some/target" {
+		t.Errorf("TargetDirList = %v, want [/some/target]", cfg.TargetDirList)
+	}
+}
+
+func TestBuildConfigFromFlags_MultipleTargetDirs(t *testing.T) {
+	saveAndRestore(t)
+
+	inlineSource = ""
+	inlineTargets = nil
+	sourceDir = "/some/source"
+	targetDirFlags = []string{"/target/one", "/target/two", "/target/three"}
+
+	cfg, err := buildConfigFromFlags()
+	if err != nil {
+		t.Fatalf("buildConfigFromFlags() error = %v", err)
+	}
+
+	if cfg.Source != "directory" {
+		t.Errorf("Source = %q, want %q", cfg.Source, "directory")
+	}
+	if len(cfg.TargetDirList) != 3 {
+		t.Fatalf("TargetDirList = %v, want 3 entries", cfg.TargetDirList)
+	}
+
+	// After normalization, each dir should become a target.
+	cfg.NormalizeDirectoryMode()
+	if len(cfg.Targets) != 3 {
+		t.Fatalf("after normalize, Targets = %v, want 3 entries", cfg.Targets)
+	}
+	for i, dir := range []string{"/target/one", "/target/two", "/target/three"} {
+		if cfg.Targets[i] != dir {
+			t.Errorf("Targets[%d] = %q, want %q", i, cfg.Targets[i], dir)
+		}
+		if cfg.TargetDirs[dir] != dir {
+			t.Errorf("TargetDirs[%q] = %q, want %q", dir, cfg.TargetDirs[dir], dir)
+		}
 	}
 }
 
 func TestBuildConfigFromFlags_SourceDirWithoutTargetDir(t *testing.T) {
-	origSource := inlineSource
-	origTargets := inlineTargets
-	origSourceDir := sourceDir
-	origTargetDir := targetDir
-	t.Cleanup(func() {
-		inlineSource = origSource
-		inlineTargets = origTargets
-		sourceDir = origSourceDir
-		targetDir = origTargetDir
-	})
+	saveAndRestore(t)
 
-	// --source-dir alone without --target-dir or --targets should fail.
 	inlineSource = ""
 	inlineTargets = nil
 	sourceDir = "/some/source"
-	targetDir = ""
+	targetDirFlags = nil
 
 	_, err := buildConfigFromFlags()
 	if err == nil {
@@ -64,22 +93,12 @@ func TestBuildConfigFromFlags_SourceDirWithoutTargetDir(t *testing.T) {
 }
 
 func TestBuildConfigFromFlags_InlineSourceStillWorks(t *testing.T) {
-	origSource := inlineSource
-	origTargets := inlineTargets
-	origSourceDir := sourceDir
-	origTargetDir := targetDir
-	t.Cleanup(func() {
-		inlineSource = origSource
-		inlineTargets = origTargets
-		sourceDir = origSourceDir
-		targetDir = origTargetDir
-	})
+	saveAndRestore(t)
 
-	// Simulate: skill-sync sync --source claude --target-dir /backup
 	inlineSource = "claude"
 	inlineTargets = nil
 	sourceDir = ""
-	targetDir = "/some/backup"
+	targetDirFlags = []string{"/some/backup"}
 
 	cfg, err := buildConfigFromFlags()
 	if err != nil {
@@ -89,7 +108,7 @@ func TestBuildConfigFromFlags_InlineSourceStillWorks(t *testing.T) {
 	if cfg.Source != "claude" {
 		t.Errorf("Source = %q, want %q", cfg.Source, "claude")
 	}
-	if cfg.TargetDir != "/some/backup" {
-		t.Errorf("TargetDir = %q, want %q", cfg.TargetDir, "/some/backup")
+	if len(cfg.TargetDirList) != 1 || cfg.TargetDirList[0] != "/some/backup" {
+		t.Errorf("TargetDirList = %v, want [/some/backup]", cfg.TargetDirList)
 	}
 }

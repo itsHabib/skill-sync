@@ -48,6 +48,38 @@ skill-sync sync
 
 Skills are written as-is using the same `<name>/SKILL.md` directory format. This replaces ad-hoc `rsync` scripts with proper drift detection.
 
+### Directory-to-Directory Sync
+
+Skip provider names entirely — sync between two directories using just paths:
+
+```bash
+# Sync a project's skills to your global Claude skills
+skill-sync sync --source-dir ~/dev/my-project/.claude/skills --target-dir ~/.claude/skills
+
+# Check for drift between two directories
+skill-sync status --source-dir ~/dev/my-project/.claude/skills --target-dir ~/.claude/skills
+```
+
+No config file or `--source` flag required.
+
+### Multiple Target Directories
+
+Use `--target-dir` multiple times to sync one source to several directories at once:
+
+```bash
+# Sync a project's skills to both global Claude skills and a backup repo
+skill-sync sync --source-dir ~/dev/my-project/.claude/skills \
+  --target-dir ~/.claude/skills \
+  --target-dir ~/dev/cc-skills-backup
+
+# Check drift across all targets
+skill-sync status --source-dir ~/dev/my-project/.claude/skills \
+  --target-dir ~/.claude/skills \
+  --target-dir ~/dev/cc-skills-backup
+```
+
+Each target directory is reported separately in status and diff output.
+
 ## Usage
 
 ### `skill-sync init`
