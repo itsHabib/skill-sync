@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/user/skill-sync/internal/provider"
-	"github.com/user/skill-sync/internal/sync"
+	"github.com/itsHabib/skill-sync/internal/provider"
+	"github.com/itsHabib/skill-sync/internal/sync"
 )
 
 // fixtureNames lists the testdata skill filenames (without extension).

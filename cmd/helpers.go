@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/user/skill-sync/internal/config"
-	"github.com/user/skill-sync/internal/provider"
+	"github.com/itsHabib/skill-sync/internal/config"
+	"github.com/itsHabib/skill-sync/internal/provider"
 )
 
 // resolveProviders creates the source and target providers from config,

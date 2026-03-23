@@ -4,7 +4,7 @@ package sync
 import (
 	"fmt"
 
-	"github.com/user/skill-sync/internal/provider"
+	"github.com/itsHabib/skill-sync/internal/provider"
 )
 
 // Status represents the outcome of syncing a single skill to a target.

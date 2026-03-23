@@ -1,4 +1,4 @@
-module github.com/user/skill-sync
+module github.com/itsHabib/skill-sync
 
 go 1.25.0
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/user/skill-sync/internal/provider"
+	"github.com/itsHabib/skill-sync/internal/provider"
 )
 
 // SkillDrift records the drift status of a single skill in a target provider.

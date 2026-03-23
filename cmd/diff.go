@@ -5,7 +5,7 @@ import (
 	"io"
 
 	"github.com/spf13/cobra"
-	"github.com/user/skill-sync/internal/sync"
+	"github.com/itsHabib/skill-sync/internal/sync"
 )
 
 var diffCmd = &cobra.Command{

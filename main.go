@@ -1,6 +1,6 @@
 package main
 
-import "github.com/user/skill-sync/cmd"
+import "github.com/itsHabib/skill-sync/cmd"
 
 func main() {
 	cmd.Execute()

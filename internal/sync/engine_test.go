@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/user/skill-sync/internal/provider"
+	"github.com/itsHabib/skill-sync/internal/provider"
 )
 
 // mockProvider implements provider.Provider with in-memory skill storage.
