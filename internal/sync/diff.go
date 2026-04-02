@@ -137,12 +137,19 @@ func (e *DiffEngine) compareTarget(sourceSkills []provider.Skill, target provide
 				Status:    provider.InSync,
 			})
 		} else {
-			diff := unifiedDiff(ss.Name+"/SKILL.md", srcFull.Content, tgtFull.Content)
-			for filename := range srcFull.SupportingFiles {
-				srcContent := srcFull.SupportingFiles[filename]
+			var diff string
+			if normalizeContent(srcFull.Content) != normalizeContent(tgtFull.Content) {
+				diff = unifiedDiff(ss.Name+"/SKILL.md", srcFull.Content, tgtFull.Content)
+			}
+			for filename, srcContent := range srcFull.SupportingFiles {
 				tgtContent := tgtFull.SupportingFiles[filename]
 				if normalizeContent(srcContent) != normalizeContent(tgtContent) {
 					diff += unifiedDiff(ss.Name+"/"+filename, srcContent, tgtContent)
+				}
+			}
+			for filename, tgtContent := range tgtFull.SupportingFiles {
+				if _, ok := srcFull.SupportingFiles[filename]; !ok {
+					diff += unifiedDiff(ss.Name+"/"+filename, "", tgtContent)
 				}
 			}
 			drifts = append(drifts, SkillDrift{

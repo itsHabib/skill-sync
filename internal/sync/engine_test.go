@@ -532,6 +532,76 @@ func TestStatus_SupportingFilesInSync(t *testing.T) {
 	}
 }
 
+func TestDiff_ExtraTargetSupportingFile(t *testing.T) {
+	source := newMockProvider("source",
+		provider.Skill{
+			Name:    "my-skill",
+			Content: "same",
+			// no supporting files
+		},
+	)
+	target := newMockProvider("target1",
+		provider.Skill{
+			Name:    "my-skill",
+			Content: "same",
+			SupportingFiles: map[string]string{
+				"extra.md": "extra content",
+			},
+		},
+	)
+
+	engine := NewDiffEngine(source, []provider.Provider{target})
+	detailed, err := engine.Diff("target1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(detailed.Diffs) != 1 {
+		t.Fatalf("got %d diffs, want 1", len(detailed.Diffs))
+	}
+	if !strings.Contains(detailed.Diffs[0].UnifiedDiff, "extra.md") {
+		t.Error("diff should mention extra.md")
+	}
+}
+
+func TestDiff_SkipIdenticalSkillMD(t *testing.T) {
+	source := newMockProvider("source",
+		provider.Skill{
+			Name:    "my-skill",
+			Content: "identical content",
+			SupportingFiles: map[string]string{
+				"TEMPLATE.md": "new template",
+			},
+		},
+	)
+	target := newMockProvider("target1",
+		provider.Skill{
+			Name:    "my-skill",
+			Content: "identical content",
+			SupportingFiles: map[string]string{
+				"TEMPLATE.md": "old template",
+			},
+		},
+	)
+
+	engine := NewDiffEngine(source, []provider.Provider{target})
+	detailed, err := engine.Diff("target1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(detailed.Diffs) != 1 {
+		t.Fatalf("got %d diffs, want 1", len(detailed.Diffs))
+	}
+	diff := detailed.Diffs[0].UnifiedDiff
+	if strings.Contains(diff, "SKILL.md") {
+		t.Error("diff should not contain SKILL.md headers when SKILL.md is identical")
+	}
+	if !strings.Contains(diff, "TEMPLATE.md") {
+		t.Error("diff should contain TEMPLATE.md")
+	}
+}
+
 func TestStatus_WhitespaceNormalization(t *testing.T) {
 	source := newMockProvider("source",
 		provider.Skill{Name: "a", Content: "content\n"},
