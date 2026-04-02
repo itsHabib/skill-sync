@@ -429,6 +429,109 @@ func TestDiff_UnknownTarget(t *testing.T) {
 	}
 }
 
+func TestStatus_SupportingFileDrift(t *testing.T) {
+	source := newMockProvider("source",
+		provider.Skill{
+			Name:    "team-kickoff",
+			Content: "# Team Kickoff\nSame SKILL.md content",
+			SupportingFiles: map[string]string{
+				"TEMPLATE.md": "updated template content",
+			},
+		},
+	)
+	target := newMockProvider("target1",
+		provider.Skill{
+			Name:    "team-kickoff",
+			Content: "# Team Kickoff\nSame SKILL.md content",
+			SupportingFiles: map[string]string{
+				"TEMPLATE.md": "old template content",
+			},
+		},
+	)
+
+	engine := NewDiffEngine(source, []provider.Provider{target})
+	report, err := engine.Status()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	drifts := report.Results["target1"]
+	if len(drifts) != 1 {
+		t.Fatalf("got %d drifts, want 1", len(drifts))
+	}
+	if drifts[0].Status != provider.Modified {
+		t.Errorf("status = %v, want Modified (supporting file TEMPLATE.md differs)", drifts[0].Status)
+	}
+}
+
+func TestStatus_SupportingFileMissing(t *testing.T) {
+	source := newMockProvider("source",
+		provider.Skill{
+			Name:    "my-skill",
+			Content: "same",
+			SupportingFiles: map[string]string{
+				"examples.md": "example content",
+			},
+		},
+	)
+	target := newMockProvider("target1",
+		provider.Skill{
+			Name:    "my-skill",
+			Content: "same",
+			// no supporting files
+		},
+	)
+
+	engine := NewDiffEngine(source, []provider.Provider{target})
+	report, err := engine.Status()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	drifts := report.Results["target1"]
+	if len(drifts) != 1 {
+		t.Fatalf("got %d drifts, want 1", len(drifts))
+	}
+	if drifts[0].Status != provider.Modified {
+		t.Errorf("status = %v, want Modified (supporting file missing in target)", drifts[0].Status)
+	}
+}
+
+func TestStatus_SupportingFilesInSync(t *testing.T) {
+	source := newMockProvider("source",
+		provider.Skill{
+			Name:    "my-skill",
+			Content: "same",
+			SupportingFiles: map[string]string{
+				"TEMPLATE.md": "same template",
+			},
+		},
+	)
+	target := newMockProvider("target1",
+		provider.Skill{
+			Name:    "my-skill",
+			Content: "same",
+			SupportingFiles: map[string]string{
+				"TEMPLATE.md": "same template",
+			},
+		},
+	)
+
+	engine := NewDiffEngine(source, []provider.Provider{target})
+	report, err := engine.Status()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	drifts := report.Results["target1"]
+	if len(drifts) != 1 {
+		t.Fatalf("got %d drifts, want 1", len(drifts))
+	}
+	if drifts[0].Status != provider.InSync {
+		t.Errorf("status = %v, want InSync", drifts[0].Status)
+	}
+}
+
 func TestStatus_WhitespaceNormalization(t *testing.T) {
 	source := newMockProvider("source",
 		provider.Skill{Name: "a", Content: "content\n"},

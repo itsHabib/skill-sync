@@ -65,8 +65,8 @@ func (p *skillMDProvider) ReadSkill(name string) (*Skill, error) {
 	return skill, nil
 }
 
-// WriteSkill writes a skill to <baseDir>/<name>/SKILL.md. Creates directories if needed.
-// Content is written as-is, preserving any frontmatter from the source.
+// WriteSkill writes a skill to <baseDir>/<name>/SKILL.md plus any supporting files.
+// Creates directories if needed. Content is written as-is, preserving any frontmatter from the source.
 func (p *skillMDProvider) WriteSkill(skill Skill) error {
 	skillDir := filepath.Join(p.baseDir, skill.Name)
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
@@ -77,10 +77,18 @@ func (p *skillMDProvider) WriteSkill(skill Skill) error {
 	if err := os.WriteFile(path, []byte(skill.Content), 0644); err != nil {
 		return fmt.Errorf("%s: write skill %q: %w", p.providerName, skill.Name, err)
 	}
+
+	for filename, content := range skill.SupportingFiles {
+		fp := filepath.Join(skillDir, filename)
+		if err := os.WriteFile(fp, []byte(content), 0644); err != nil {
+			return fmt.Errorf("%s: write supporting file %q for skill %q: %w", p.providerName, filename, skill.Name, err)
+		}
+	}
 	return nil
 }
 
-// readSkillFile reads and parses a single SKILL.md file into a Skill.
+// readSkillFile reads and parses a single SKILL.md file into a Skill,
+// including any supporting files in the same directory.
 func (p *skillMDProvider) readSkillFile(name, path string) (*Skill, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -115,6 +123,26 @@ func (p *skillMDProvider) readSkillFile(name, path string) (*Skill, error) {
 
 	// Extract arguments.
 	skill.Arguments = extractArguments(raw)
+
+	// Read supporting files (everything in the skill directory besides SKILL.md).
+	skillDir := filepath.Dir(path)
+	entries, err := os.ReadDir(skillDir)
+	if err != nil {
+		return skill, nil // non-fatal: skill still works without supporting files
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() == "SKILL.md" {
+			continue
+		}
+		content, err := os.ReadFile(filepath.Join(skillDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		if skill.SupportingFiles == nil {
+			skill.SupportingFiles = make(map[string]string)
+		}
+		skill.SupportingFiles[entry.Name()] = string(content)
+	}
 
 	return skill, nil
 }

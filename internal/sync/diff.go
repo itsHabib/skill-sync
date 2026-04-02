@@ -48,6 +48,30 @@ func normalizeContent(s string) string {
 	return strings.TrimRight(s, " \t\r\n")
 }
 
+// skillsMatch compares SKILL.md content and all supporting files between source and target.
+func skillsMatch(src, tgt *provider.Skill) bool {
+	if normalizeContent(src.Content) != normalizeContent(tgt.Content) {
+		return false
+	}
+
+	// Check supporting files: any file present in source must match in target.
+	for filename, srcContent := range src.SupportingFiles {
+		tgtContent, ok := tgt.SupportingFiles[filename]
+		if !ok || normalizeContent(srcContent) != normalizeContent(tgtContent) {
+			return false
+		}
+	}
+
+	// Check for files in target that don't exist in source.
+	for filename := range tgt.SupportingFiles {
+		if _, ok := src.SupportingFiles[filename]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Status compares source skills against all targets and returns a DriftReport
 // with per-skill status for each target.
 func (e *DiffEngine) Status() (*DriftReport, error) {
@@ -107,13 +131,20 @@ func (e *DiffEngine) compareTarget(sourceSkills []provider.Skill, target provide
 			return nil, fmt.Errorf("read target skill %q: %w", ts.Name, err)
 		}
 
-		if normalizeContent(srcFull.Content) == normalizeContent(tgtFull.Content) {
+		if skillsMatch(srcFull, tgtFull) {
 			drifts = append(drifts, SkillDrift{
 				SkillName: ss.Name,
 				Status:    provider.InSync,
 			})
 		} else {
-			diff := unifiedDiff(ss.Name, srcFull.Content, tgtFull.Content)
+			diff := unifiedDiff(ss.Name+"/SKILL.md", srcFull.Content, tgtFull.Content)
+			for filename := range srcFull.SupportingFiles {
+				srcContent := srcFull.SupportingFiles[filename]
+				tgtContent := tgtFull.SupportingFiles[filename]
+				if normalizeContent(srcContent) != normalizeContent(tgtContent) {
+					diff += unifiedDiff(ss.Name+"/"+filename, srcContent, tgtContent)
+				}
+			}
 			drifts = append(drifts, SkillDrift{
 				SkillName:   ss.Name,
 				Status:      provider.Modified,
