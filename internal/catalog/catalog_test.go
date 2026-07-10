@@ -185,6 +185,20 @@ func TestLoadRejectsMissingFrontmatterAndBrokenRelativeLinks(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsUnknownManifestFieldsAndMultipleDocuments(t *testing.T) {
+	root := t.TempDir()
+	writeSkill(t, root, "skills/alpha", "alpha")
+	manifest := writeManifest(t, root, portableManifest("alpha")+"unexpected: true\n")
+	if _, err := Load(root, manifest); err == nil {
+		t.Fatal("unknown manifest field was accepted")
+	}
+
+	manifest = writeManifest(t, root, portableManifest("alpha")+"---\nversion: 1\n")
+	if _, err := Load(root, manifest); err == nil {
+		t.Fatal("multiple YAML documents were accepted")
+	}
+}
+
 func TestLoadIgnoresTemplateLinksInsideCode(t *testing.T) {
 	root := t.TempDir()
 	writeSkill(t, root, "skills/template", "```markdown\n[generated](../../not-in-the-skill.md)\n```\n`[inline]($DYNAMIC)`")

@@ -3,7 +3,9 @@
 package catalog
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -67,8 +69,17 @@ func Load(root, manifestPath string) (*Catalog, error) {
 		return nil, fmt.Errorf("catalog: read manifest: %w", err)
 	}
 	var manifest Manifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
+	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&manifest); err != nil {
 		return nil, fmt.Errorf("catalog: parse manifest: %w", err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return nil, fmt.Errorf("catalog: manifest must contain exactly one YAML document")
+		}
+		return nil, fmt.Errorf("catalog: parse trailing manifest content: %w", err)
 	}
 
 	c := &Catalog{root: absRoot, manifest: manifest}
@@ -91,9 +102,19 @@ func (c *Catalog) validate() error {
 			return err
 		}
 	}
+	return c.validateUnmanaged()
+}
+
+func (c *Catalog) validateUnmanaged() error {
 	for target, names := range c.manifest.Unmanaged {
+		if strings.TrimSpace(target) == "" {
+			return fmt.Errorf("catalog: unmanaged target must not be empty")
+		}
 		seen := map[string]bool{}
 		for _, name := range names {
+			if name == "" || strings.ContainsAny(name, `/\\`) {
+				return fmt.Errorf("catalog: invalid unmanaged skill name %q for %s", name, target)
+			}
 			if seen[name] {
 				return fmt.Errorf("catalog: unmanaged %s/%s declared twice", target, name)
 			}

@@ -165,7 +165,7 @@ func (e *Engine) syncSkillToTarget(result *Result, skill provider.Skill, target 
 		result.TotalErrored++
 		return
 	}
-	if !skillsMatch(&skill, written) {
+	if !SkillsMatch(&skill, written) {
 		result.Details = append(result.Details, Detail{
 			SkillName: skill.Name,
 			Target:    target.Name(),
