@@ -49,7 +49,7 @@ func normalizeContent(s string) string {
 }
 
 // skillsMatch compares SKILL.md content and all supporting files between source and target.
-func skillsMatch(src, tgt *provider.Skill) bool {
+func SkillsMatch(src, tgt *provider.Skill) bool {
 	if normalizeContent(src.Content) != normalizeContent(tgt.Content) {
 		return false
 	}
@@ -131,7 +131,7 @@ func (e *DiffEngine) compareTarget(sourceSkills []provider.Skill, target provide
 			return nil, fmt.Errorf("read target skill %q: %w", ts.Name, err)
 		}
 
-		if skillsMatch(srcFull, tgtFull) {
+		if SkillsMatch(srcFull, tgtFull) {
 			drifts = append(drifts, SkillDrift{
 				SkillName: ss.Name,
 				Status:    provider.InSync,

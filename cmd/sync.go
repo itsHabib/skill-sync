@@ -5,9 +5,10 @@ import (
 	"io"
 	"text/tabwriter"
 
-	"github.com/spf13/cobra"
+	"github.com/itsHabib/skill-sync/internal/catalog"
 	"github.com/itsHabib/skill-sync/internal/provider"
 	"github.com/itsHabib/skill-sync/internal/sync"
+	"github.com/spf13/cobra"
 )
 
 var syncCmd = &cobra.Command{
@@ -30,7 +31,10 @@ Exits with code 1 if any skill fails to sync.`,
   skill-sync sync --source claude --targets copilot,gemini
 
   # Sync to a plain directory (e.g., git repo backup)
-  skill-sync sync --source claude --target-dir ~/dev/cc-skills`,
+  skill-sync sync --source claude --target-dir ~/dev/cc-skills
+
+  # Apply an explicit repository catalog to Claude and Codex
+  skill-sync sync --source-dir . --manifest catalog.yaml --targets claude,codex --force`,
 	RunE: runSync,
 }
 
@@ -54,6 +58,13 @@ func runSync(cmd *cobra.Command, _ []string) error {
 	}
 
 	w := cmd.OutOrStdout()
+	if manifestPath != "" {
+		catalogPolicy, err := catalog.Load(Cfg.SourceDir, manifestPath)
+		if err != nil {
+			return fmt.Errorf("sync: %w", err)
+		}
+		return doCatalogSync(w, catalogPolicy, targets, syncSkills, syncDryRun, syncForce)
+	}
 
 	if syncDryRun {
 		return doSyncDryRun(w, source, targets, syncSkills)
@@ -71,6 +82,32 @@ func runSync(cmd *cobra.Command, _ []string) error {
 		fmt.Fprintf(w, "  target:  %s (%s)\n", t.Name(), t.SkillDir())
 	}
 
+	return nil
+}
+
+func doCatalogSync(w io.Writer, policy *catalog.Catalog, targets []provider.Provider, skillFilter []string, dryRun, force bool) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "SKILL\tTARGET\tSTATUS")
+	totalErrors := 0
+	for _, target := range targets {
+		result, err := policy.Sync(target, dryRun, force, skillFilter)
+		for _, detail := range result.Details {
+			status := string(detail.Action)
+			if detail.Err != nil {
+				status += ": " + detail.Err.Error()
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\n", detail.Skill, detail.Target, status)
+		}
+		totalErrors += result.Errors
+		if err != nil && result.Errors == 0 {
+			totalErrors++
+		}
+	}
+	tw.Flush()
+	fmt.Fprintf(w, "\nErrors: %d\n", totalErrors)
+	if totalErrors > 0 {
+		return fmt.Errorf("catalog sync completed with %d unresolved/error entries", totalErrors)
+	}
 	return nil
 }
 

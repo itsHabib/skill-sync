@@ -70,6 +70,65 @@ skill-sync status --source-dir ./skills --targets claude,codex --json
 `status` is collision-safe and read-only: a same-name difference is reported as
 `modified` and exits non-zero. Use it before any `sync --force` operation.
 
+### Policy manifest
+
+Use a manifest when Claude and Codex intentionally have different implementations
+or when installed homes must be treated as projections rather than sources:
+
+```yaml
+version: 1
+skills:
+  tdd:
+    owner: michael
+    visibility: public
+    mode: portable-copy
+    source: skills/tdd
+    targets: [claude, codex]
+
+  work-driver:
+    owner: michael
+    visibility: private
+    mode: target-adapted
+    sources:
+      claude: skills/work-driver
+      codex: targets/codex/work-driver
+    targets: [claude, codex]
+
+unmanaged:
+  codex: [external-skill]
+```
+
+Supported modes:
+
+- `portable-copy` — one declared source projects identically to every target.
+- `target-adapted` — each target has a repository-owned native source.
+- `replacement` — an explicitly reviewed source replaces an older target copy.
+- `manual` — visible unresolved ownership; status fails and sync never writes it.
+
+Source paths are relative to `--source-dir` (or the manifest directory when
+`--source-dir` is omitted), must remain inside that root, and must point to a
+directory named after the skill. Catalog loading validates `SKILL.md`
+frontmatter, Markdown relative links, and nested supporting files.
+
+```bash
+# Read-only ownership/drift gate. Explicitly unmanaged target skills are shown
+# but do not make status fail; unknown extras and manual entries do.
+skill-sync status --source-dir . --manifest catalog.yaml \
+  --targets claude,codex --json
+
+# Preview: never writes.
+skill-sync sync --source-dir . --manifest catalog.yaml \
+  --targets claude,codex --dry-run
+
+# Apply declared projections. Divergent targets remain conflicts unless the
+# reviewed manifest source is explicitly authorized with --force.
+skill-sync sync --source-dir . --manifest catalog.yaml \
+  --targets claude,codex --force
+```
+
+Manifest sync is additive: it never deletes target-only files or skills. Every
+write is read back and compared, including nested adapters/templates/workflows.
+
 No config file or `--source` flag required.
 
 ### Multiple Target Directories
