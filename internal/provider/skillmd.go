@@ -89,7 +89,13 @@ func (p *skillMDProvider) WriteSkill(skill Skill) error {
 	}
 
 	for filename, content := range skill.SupportingFiles {
-		fp := filepath.Join(skillDir, filename)
+		fp, err := confinedPath(skillDir, filename)
+		if err != nil {
+			return fmt.Errorf("%s: write supporting file %q for skill %q: %w", p.providerName, filename, skill.Name, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(fp), 0755); err != nil {
+			return fmt.Errorf("%s: create supporting directory %q for skill %q: %w", p.providerName, filepath.Dir(filename), skill.Name, err)
+		}
 		if err := os.WriteFile(fp, []byte(content), 0644); err != nil {
 			return fmt.Errorf("%s: write supporting file %q for skill %q: %w", p.providerName, filename, skill.Name, err)
 		}
@@ -134,27 +140,54 @@ func (p *skillMDProvider) readSkillFile(name, path string) (*Skill, error) {
 	// Extract arguments.
 	skill.Arguments = extractArguments(raw)
 
-	// Read supporting files (everything in the skill directory besides SKILL.md).
+	// Read supporting files recursively (everything below the skill directory
+	// besides the root SKILL.md). Nested adapters/templates are part of a skill,
+	// not optional decoration.
 	skillDir := filepath.Dir(path)
-	entries, err := os.ReadDir(skillDir)
-	if err != nil {
-		return skill, nil // non-fatal: skill still works without supporting files
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || entry.Name() == "SKILL.md" {
-			continue
+	err = filepath.WalkDir(skillDir, func(filePath string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-		content, err := os.ReadFile(filepath.Join(skillDir, entry.Name()))
+		if filePath == skillDir || entry.IsDir() {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("supporting file symlink is not allowed: %s", filePath)
+		}
+		rel, err := filepath.Rel(skillDir, filePath)
 		if err != nil {
-			continue
+			return err
+		}
+		if filepath.ToSlash(rel) == "SKILL.md" {
+			return nil
+		}
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return err
 		}
 		if skill.SupportingFiles == nil {
 			skill.SupportingFiles = make(map[string]string)
 		}
-		skill.SupportingFiles[entry.Name()] = string(content)
+		skill.SupportingFiles[filepath.ToSlash(rel)] = string(content)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read supporting files: %w", err)
 	}
 
 	return skill, nil
+}
+
+func confinedPath(root, relative string) (string, error) {
+	if relative == "" || filepath.IsAbs(relative) {
+		return "", fmt.Errorf("path must be non-empty and relative")
+	}
+	joined := filepath.Join(root, filepath.FromSlash(relative))
+	rel, err := filepath.Rel(root, joined)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path escapes skill directory")
+	}
+	return joined, nil
 }
 
 // stripFrontmatter removes YAML frontmatter (--- delimited) from content.

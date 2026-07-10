@@ -350,6 +350,43 @@ func TestWriteSkill_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestWriteSkill_RoundTripNestedSupportingFiles(t *testing.T) {
+	dir := t.TempDir()
+	p := newTestProvider("claude", dir)
+	original := Skill{
+		Name:    "interview",
+		Content: "# Interview\n",
+		SupportingFiles: map[string]string{
+			"adapters/doc.md":            "doc adapter",
+			"templates/header.md":        "header",
+			"workflows/interview.js":     "workflow",
+			"workflows/nested/readme.md": "nested",
+		},
+	}
+	if err := p.WriteSkill(original); err != nil {
+		t.Fatal(err)
+	}
+	got, err := p.ReadSkill("interview")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.SupportingFiles, original.SupportingFiles) {
+		t.Fatalf("SupportingFiles = %#v, want %#v", got.SupportingFiles, original.SupportingFiles)
+	}
+}
+
+func TestWriteSkill_RejectsSupportingFileTraversal(t *testing.T) {
+	p := newTestProvider("claude", t.TempDir())
+	err := p.WriteSkill(Skill{
+		Name:            "unsafe",
+		Content:         "# Unsafe\n",
+		SupportingFiles: map[string]string{"../escape.md": "nope"},
+	})
+	if err == nil {
+		t.Fatal("WriteSkill accepted a supporting path outside the skill directory")
+	}
+}
+
 func TestWriteSkill_RoundTrip_NoDescription(t *testing.T) {
 	dir := t.TempDir()
 	p := newTestProvider("claude", dir)

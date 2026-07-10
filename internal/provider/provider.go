@@ -19,8 +19,9 @@ type Skill struct {
 	// Content is the full skill content including the description line.
 	Content string
 
-	// SupportingFiles maps relative filenames (e.g., "TEMPLATE.md") to their
-	// content for any files in the skill directory besides SKILL.md.
+	// SupportingFiles maps slash-separated relative paths (e.g.,
+	// "templates/TEMPLATE.md") to content for every file below the skill
+	// directory besides the root SKILL.md.
 	SupportingFiles map[string]string
 
 	// Arguments contains extracted argument placeholders (e.g., "$ARGUMENTS", "${PROJECT}").
@@ -62,6 +63,10 @@ const (
 	MissingInTarget
 	// ExtraInTarget means the skill is absent in source but exists in the target.
 	ExtraInTarget
+	// Manual means the catalog intentionally requires human resolution.
+	Manual
+	// Unmanaged means the target skill is explicitly outside catalog ownership.
+	Unmanaged
 )
 
 // String returns the human-readable status label.
@@ -75,6 +80,10 @@ func (s SkillStatus) String() string {
 		return "missing-in-target"
 	case ExtraInTarget:
 		return "extra-in-target"
+	case Manual:
+		return "manual"
+	case Unmanaged:
+		return "unmanaged"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(s))
 	}
