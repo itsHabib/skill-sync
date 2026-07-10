@@ -41,6 +41,11 @@ func (m *mockProvider) WriteSkill(skill provider.Skill) error {
 		return m.writeErr
 	}
 	m.written = append(m.written, skill)
+	if m.readMap == nil {
+		m.readMap = make(map[string]*provider.Skill)
+	}
+	written := skill
+	m.readMap[skill.Name] = &written
 	return nil
 }
 

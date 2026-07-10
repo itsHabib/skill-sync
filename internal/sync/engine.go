@@ -154,6 +154,27 @@ func (e *Engine) syncSkillToTarget(result *Result, skill provider.Skill, target 
 		result.TotalErrored++
 		return
 	}
+	written, readErr := target.ReadSkill(skill.Name)
+	if readErr != nil {
+		result.Details = append(result.Details, Detail{
+			SkillName: skill.Name,
+			Target:    target.Name(),
+			Status:    StatusError,
+			Error:     fmt.Errorf("sync: verify written skill %q in %q: %w", skill.Name, target.Name(), readErr),
+		})
+		result.TotalErrored++
+		return
+	}
+	if !skillsMatch(&skill, written) {
+		result.Details = append(result.Details, Detail{
+			SkillName: skill.Name,
+			Target:    target.Name(),
+			Status:    StatusError,
+			Error:     fmt.Errorf("sync: verify written skill %q in %q: target still differs; remove stale target-only files explicitly", skill.Name, target.Name()),
+		})
+		result.TotalErrored++
+		return
+	}
 
 	result.Details = append(result.Details, Detail{
 		SkillName: skill.Name,

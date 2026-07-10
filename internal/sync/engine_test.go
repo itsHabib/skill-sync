@@ -17,6 +17,26 @@ type mockProvider struct {
 	readErr  map[string]error // per-skill read errors
 }
 
+type stickySupportingProvider struct {
+	*mockProvider
+}
+
+func (p *stickySupportingProvider) WriteSkill(skill provider.Skill) error {
+	existing := p.skills[skill.Name]
+	merged := make(map[string]string, len(skill.SupportingFiles)+len(existing.SupportingFiles))
+	for name, content := range skill.SupportingFiles {
+		merged[name] = content
+	}
+	for name, content := range existing.SupportingFiles {
+		if _, replaced := merged[name]; !replaced {
+			merged[name] = content
+		}
+	}
+	skill.SupportingFiles = merged
+	p.skills[skill.Name] = skill
+	return nil
+}
+
 func newMockProvider(name string, skills ...provider.Skill) *mockProvider {
 	m := &mockProvider{
 		name:     name,
@@ -179,6 +199,33 @@ func TestSync_WriteError(t *testing.T) {
 	// "b" should still have been synced
 	if _, ok := target.skills["b"]; !ok {
 		t.Error("skill 'b' should have been synced despite 'a' error")
+	}
+}
+
+func TestSync_VerifiesWriteAndRefusesFalseSuccessWithStaleAssets(t *testing.T) {
+	source := newMockProvider("source", provider.Skill{
+		Name:            "interview",
+		Content:         "same",
+		SupportingFiles: map[string]string{"templates/current.md": "current"},
+	})
+	target := &stickySupportingProvider{newMockProvider("target", provider.Skill{
+		Name:    "interview",
+		Content: "same",
+		SupportingFiles: map[string]string{
+			"templates/current.md": "old",
+			"templates/stale.md":   "stale",
+		},
+	})}
+
+	result, err := NewEngine(source, []provider.Provider{target}).Sync(nil, true)
+	if err != nil {
+		t.Fatalf("unexpected fatal error: %v", err)
+	}
+	if result.TotalSynced != 0 || result.TotalErrored != 1 {
+		t.Fatalf("result = %+v, want one verification error and no success", result)
+	}
+	if got := result.Details[0].Error.Error(); !strings.Contains(got, "stale target-only files") {
+		t.Fatalf("verification error = %q, want explicit stale-file guidance", got)
 	}
 }
 
