@@ -21,6 +21,7 @@ var argPattern = regexp.MustCompile(`\$ARGUMENTS|\$\{([A-Z_][A-Z0-9_]*)\}`)
 type skillMDProvider struct {
 	providerName string
 	baseDir      string
+	initErr      error
 }
 
 // Name returns the provider's identifier.
@@ -31,6 +32,9 @@ func (p *skillMDProvider) SkillDir() string { return p.baseDir }
 
 // ListSkills scans baseDir for subdirectories containing SKILL.md.
 func (p *skillMDProvider) ListSkills() ([]Skill, error) {
+	if p.initErr != nil {
+		return nil, p.initErr
+	}
 	entries, err := os.ReadDir(p.baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("%s: read skill directory: %w", p.providerName, err)
@@ -57,6 +61,9 @@ func (p *skillMDProvider) ListSkills() ([]Skill, error) {
 
 // ReadSkill reads a single skill by name from <baseDir>/<name>/SKILL.md.
 func (p *skillMDProvider) ReadSkill(name string) (*Skill, error) {
+	if p.initErr != nil {
+		return nil, p.initErr
+	}
 	path := filepath.Join(p.baseDir, name, "SKILL.md")
 	skill, err := p.readSkillFile(name, path)
 	if err != nil {
@@ -68,6 +75,9 @@ func (p *skillMDProvider) ReadSkill(name string) (*Skill, error) {
 // WriteSkill writes a skill to <baseDir>/<name>/SKILL.md plus any supporting files.
 // Creates directories if needed. Content is written as-is, preserving any frontmatter from the source.
 func (p *skillMDProvider) WriteSkill(skill Skill) error {
+	if p.initErr != nil {
+		return p.initErr
+	}
 	skillDir := filepath.Join(p.baseDir, skill.Name)
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		return fmt.Errorf("%s: create skill directory: %w", p.providerName, err)
