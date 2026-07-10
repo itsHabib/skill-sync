@@ -1,13 +1,15 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"text/tabwriter"
 
-	"github.com/spf13/cobra"
 	"github.com/itsHabib/skill-sync/internal/provider"
 	"github.com/itsHabib/skill-sync/internal/sync"
+	"github.com/spf13/cobra"
 )
 
 var statusCmd = &cobra.Command{
@@ -24,14 +26,19 @@ Exits with code 1 if any drift is detected -- useful for CI checks.`,
   skill-sync status --skill deploy --skill review
 
   # Use inline providers (no config file)
-  skill-sync status --source claude --targets copilot,gemini`,
+  skill-sync status --source claude --targets copilot,gemini
+
+  # Check a repository catalog against Claude and Codex as JSON
+  skill-sync status --source-dir ./skills --targets claude,codex --json`,
 	RunE: runStatus,
 }
 
 var statusSkills []string
+var statusJSON bool
 
 func init() {
 	statusCmd.Flags().StringSliceVar(&statusSkills, "skill", nil, "check only named skills (repeatable)")
+	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "write a stable machine-readable drift report")
 	rootCmd.AddCommand(statusCmd)
 }
 
@@ -42,6 +49,9 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	engine := sync.NewDiffEngine(source, targets)
+	if statusJSON {
+		return doStatusJSON(cmd.OutOrStdout(), engine, statusSkills)
+	}
 	return doStatus(cmd.OutOrStdout(), engine, statusSkills)
 }
 
@@ -57,8 +67,8 @@ func doStatus(w io.Writer, engine *sync.DiffEngine, skillFilter []string) error 
 	}
 
 	hasDrift := false
-
-	for targetName, drifts := range report.Results {
+	for _, targetName := range sortedTargetNames(report) {
+		drifts := sortedDrifts(report.Results[targetName])
 		fmt.Fprintf(w, "Target: %s\n", targetName)
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(tw, "SKILL\tSTATUS")
@@ -83,6 +93,78 @@ func doStatus(w io.Writer, engine *sync.DiffEngine, skillFilter []string) error 
 	}
 
 	return nil
+}
+
+type jsonStatusReport struct {
+	Drift   bool               `json:"drift"`
+	Targets []jsonStatusTarget `json:"targets"`
+}
+
+type jsonStatusTarget struct {
+	Name   string            `json:"name"`
+	Skills []jsonStatusSkill `json:"skills"`
+}
+
+type jsonStatusSkill struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+func doStatusJSON(w io.Writer, engine *sync.DiffEngine, skillFilter []string) error {
+	report, err := engine.Status()
+	if err != nil {
+		return fmt.Errorf("status: %w", err)
+	}
+
+	filterSet := make(map[string]bool, len(skillFilter))
+	for _, name := range skillFilter {
+		filterSet[name] = true
+	}
+
+	out := jsonStatusReport{}
+	for _, targetName := range sortedTargetNames(report) {
+		target := jsonStatusTarget{Name: targetName, Skills: []jsonStatusSkill{}}
+		for _, drift := range sortedDrifts(report.Results[targetName]) {
+			if len(filterSet) > 0 && !filterSet[drift.SkillName] {
+				continue
+			}
+			target.Skills = append(target.Skills, jsonStatusSkill{
+				Name:   drift.SkillName,
+				Status: drift.Status.String(),
+			})
+			if drift.Status != provider.InSync {
+				out.Drift = true
+			}
+		}
+		out.Targets = append(out.Targets, target)
+	}
+
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(out); err != nil {
+		return fmt.Errorf("status: encode JSON: %w", err)
+	}
+	if out.Drift {
+		return fmt.Errorf("drift detected")
+	}
+	return nil
+}
+
+func sortedTargetNames(report *sync.DriftReport) []string {
+	names := make([]string, 0, len(report.Results))
+	for name := range report.Results {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func sortedDrifts(drifts []sync.SkillDrift) []sync.SkillDrift {
+	sorted := append([]sync.SkillDrift(nil), drifts...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].SkillName < sorted[j].SkillName
+	})
+	return sorted
 }
 
 func statusSymbol(s provider.SkillStatus) string {

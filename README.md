@@ -4,7 +4,7 @@ Sync AI assistant skills across providers.
 
 ## The Problem
 
-Every AI coding assistant stores custom skills in a different directory: Claude Code uses `~/.claude/skills/`, Copilot uses `~/.copilot/skills/`, Gemini CLI uses `~/.gemini/skills/`, and Factory uses `~/.factory/skills/`. They all use the same `SKILL.md` format (the [Agent Skills open standard](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)), but if you use more than one tool, you end up maintaining the same skills in multiple places. When one copy drifts, you have no way to know until something breaks.
+Every AI coding assistant stores custom skills in a different directory: Claude Code uses `~/.claude/skills/`, Codex uses `~/.codex/skills/`, Copilot uses `~/.copilot/skills/`, Gemini CLI uses `~/.gemini/skills/`, and Factory uses `~/.factory/skills/`. They all use the same `SKILL.md` format (the [Agent Skills open standard](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)), but if you use more than one tool, you end up maintaining the same skills in multiple places. When one copy drifts, you have no way to know until something breaks.
 
 skill-sync fixes this. Declare one provider as your source of truth, and skill-sync copies your skills to every target you configure. Then use `status` to catch drift before it becomes a problem.
 
@@ -12,7 +12,7 @@ skill-sync fixes this. Declare one provider as your source of truth, and skill-s
 
 ```bash
 # Install
-go install github.com/user/skill-sync@latest
+go install github.com/itsHabib/skill-sync@latest
 
 # Create a config file
 skill-sync init --source claude --targets copilot,gemini,factory
@@ -59,6 +59,16 @@ skill-sync sync --source-dir ~/dev/my-project/.claude/skills --target-dir ~/.cla
 # Check for drift between two directories
 skill-sync status --source-dir ~/dev/my-project/.claude/skills --target-dir ~/.claude/skills
 ```
+
+Compare a repository catalog directly against Claude and Codex without writing
+either installed home:
+
+```bash
+skill-sync status --source-dir ./skills --targets claude,codex --json
+```
+
+`status` is collision-safe and read-only: a same-name difference is reported as
+`modified` and exits non-zero. Use it before any `sync --force` operation.
 
 No config file or `--source` flag required.
 
@@ -192,6 +202,7 @@ All providers use the [Agent Skills open standard](https://docs.github.com/en/co
 | Provider | Default Skill Location | Aliases / Compat |
 |----------|----------------------|------------------|
 | Claude Code | `~/.claude/skills/<name>/SKILL.md` | — |
+| Codex | `~/.codex/skills/<name>/SKILL.md` | — |
 | GitHub Copilot | `~/.copilot/skills/<name>/SKILL.md` | Also reads `~/.claude/skills/` |
 | Gemini CLI | `~/.gemini/skills/<name>/SKILL.md` | Also reads `~/.agents/skills/` |
 | Factory AI | `~/.factory/skills/<name>/SKILL.md` | Also reads `.agent/skills/` |
