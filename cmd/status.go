@@ -7,6 +7,7 @@ import (
 	"sort"
 	"text/tabwriter"
 
+	"github.com/itsHabib/skill-sync/internal/catalog"
 	"github.com/itsHabib/skill-sync/internal/provider"
 	"github.com/itsHabib/skill-sync/internal/sync"
 	"github.com/spf13/cobra"
@@ -28,8 +29,8 @@ Exits with code 1 if any drift is detected -- useful for CI checks.`,
   # Use inline providers (no config file)
   skill-sync status --source claude --targets copilot,gemini
 
-  # Check a repository catalog against Claude and Codex as JSON
-  skill-sync status --source-dir ./skills --targets claude,codex --json`,
+  # Check a policy catalog against Claude and Codex as JSON
+  skill-sync status --source-dir . --manifest catalog.yaml --targets claude,codex --json`,
 	RunE: runStatus,
 }
 
@@ -49,6 +50,20 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	engine := sync.NewDiffEngine(source, targets)
+	if manifestPath != "" {
+		catalogPolicy, err := catalog.Load(Cfg.SourceDir, manifestPath)
+		if err != nil {
+			return fmt.Errorf("status: %w", err)
+		}
+		report, err := catalogPolicy.Status(targets)
+		if err != nil {
+			return fmt.Errorf("status: %w", err)
+		}
+		if statusJSON {
+			return writeStatusJSON(cmd.OutOrStdout(), report, statusSkills)
+		}
+		return writeStatus(cmd.OutOrStdout(), report, statusSkills)
+	}
 	if statusJSON {
 		return doStatusJSON(cmd.OutOrStdout(), engine, statusSkills)
 	}
@@ -61,6 +76,10 @@ func doStatus(w io.Writer, engine *sync.DiffEngine, skillFilter []string) error 
 		return fmt.Errorf("status: %w", err)
 	}
 
+	return writeStatus(w, report, skillFilter)
+}
+
+func writeStatus(w io.Writer, report *sync.DriftReport, skillFilter []string) error {
 	filterSet := make(map[string]bool, len(skillFilter))
 	for _, name := range skillFilter {
 		filterSet[name] = true
@@ -79,7 +98,7 @@ func doStatus(w io.Writer, engine *sync.DiffEngine, skillFilter []string) error 
 			}
 			symbol := statusSymbol(d.Status)
 			fmt.Fprintf(tw, "%s\t%s\n", d.SkillName, symbol)
-			if d.Status != provider.InSync {
+			if isDriftStatus(d.Status) {
 				hasDrift = true
 			}
 		}
@@ -116,6 +135,10 @@ func doStatusJSON(w io.Writer, engine *sync.DiffEngine, skillFilter []string) er
 		return fmt.Errorf("status: %w", err)
 	}
 
+	return writeStatusJSON(w, report, skillFilter)
+}
+
+func writeStatusJSON(w io.Writer, report *sync.DriftReport, skillFilter []string) error {
 	filterSet := make(map[string]bool, len(skillFilter))
 	for _, name := range skillFilter {
 		filterSet[name] = true
@@ -132,7 +155,7 @@ func doStatusJSON(w io.Writer, engine *sync.DiffEngine, skillFilter []string) er
 				Name:   drift.SkillName,
 				Status: drift.Status.String(),
 			})
-			if drift.Status != provider.InSync {
+			if isDriftStatus(drift.Status) {
 				out.Drift = true
 			}
 		}
@@ -177,7 +200,15 @@ func statusSymbol(s provider.SkillStatus) string {
 		return "[-] missing"
 	case provider.ExtraInTarget:
 		return "[+] extra"
+	case provider.Manual:
+		return "[?] manual"
+	case provider.Unmanaged:
+		return "[~] unmanaged"
 	default:
 		return "[?] unknown"
 	}
+}
+
+func isDriftStatus(status provider.SkillStatus) bool {
+	return status != provider.InSync && status != provider.Unmanaged
 }

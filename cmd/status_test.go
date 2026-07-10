@@ -187,3 +187,28 @@ func TestStatusJSONIsStableAndReportsDrift(t *testing.T) {
 		t.Errorf("gemini status = %q, want missing-in-target", got.Targets[1].Skills[0].Status)
 	}
 }
+
+func TestStatusJSONTreatsUnmanagedAsOwnedButManualAsDrift(t *testing.T) {
+	unmanaged := &sync.DriftReport{Results: map[string][]sync.SkillDrift{
+		"codex": {{SkillName: "external", Status: provider.Unmanaged}},
+	}}
+	var buf bytes.Buffer
+	if err := writeStatusJSON(&buf, unmanaged, nil); err != nil {
+		t.Fatalf("unmanaged entry caused drift: %v", err)
+	}
+	var report jsonStatusReport
+	if err := json.Unmarshal(buf.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Drift {
+		t.Fatal("unmanaged entry set drift=true")
+	}
+
+	manual := &sync.DriftReport{Results: map[string][]sync.SkillDrift{
+		"codex": {{SkillName: "needs-decision", Status: provider.Manual}},
+	}}
+	buf.Reset()
+	if err := writeStatusJSON(&buf, manual, nil); err == nil {
+		t.Fatal("manual entry did not cause drift")
+	}
+}

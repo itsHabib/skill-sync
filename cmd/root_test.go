@@ -11,12 +11,38 @@ func saveAndRestore(t *testing.T) {
 	origTargets := inlineTargets
 	origSourceDir := sourceDir
 	origTargetDirFlags := targetDirFlags
+	origManifestPath := manifestPath
 	t.Cleanup(func() {
 		inlineSource = origSource
 		inlineTargets = origTargets
 		sourceDir = origSourceDir
 		targetDirFlags = origTargetDirFlags
+		manifestPath = origManifestPath
 	})
+}
+
+func TestBuildConfigFromFlags_ManifestWithProviderTargets(t *testing.T) {
+	saveAndRestore(t)
+
+	manifestPath = t.TempDir() + "/catalog.yaml"
+	inlineTargets = []string{"claude", "codex"}
+	inlineSource = ""
+	sourceDir = ""
+	targetDirFlags = nil
+
+	cfg, err := buildConfigFromFlags()
+	if err != nil {
+		t.Fatalf("buildConfigFromFlags() error = %v", err)
+	}
+	if cfg.Source != "directory" {
+		t.Errorf("Source = %q, want directory", cfg.Source)
+	}
+	if cfg.SourceDir == "" {
+		t.Fatal("SourceDir must default to the manifest directory")
+	}
+	if len(cfg.Targets) != 2 || cfg.Targets[0] != "claude" || cfg.Targets[1] != "codex" {
+		t.Errorf("Targets = %v, want [claude codex]", cfg.Targets)
+	}
 }
 
 func TestBuildConfigFromFlags_PureDirectoryMode(t *testing.T) {

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/itsHabib/skill-sync/internal/config"
 	"github.com/itsHabib/skill-sync/internal/provider"
@@ -17,6 +18,7 @@ var (
 	inlineTargets  []string
 	sourceDir      string
 	targetDirFlags []string
+	manifestPath   string
 )
 
 var rootCmd = &cobra.Command{
@@ -54,7 +56,8 @@ keep all your providers in lockstep.`,
 		var err error
 
 		inlineDirectoryMode := sourceDir != "" && (len(inlineTargets) > 0 || len(targetDirFlags) > 0)
-		if inlineSource != "" || inlineDirectoryMode {
+		inlineManifestMode := manifestPath != "" && len(inlineTargets) > 0
+		if inlineSource != "" || inlineDirectoryMode || inlineManifestMode {
 			cfg, err = buildConfigFromFlags()
 		} else {
 			cfg, err = loadConfigFromFile()
@@ -75,6 +78,7 @@ func init() {
 	rootCmd.PersistentFlags().StringSliceVar(&inlineTargets, "targets", nil, "target providers to sync skills to (overrides config file)")
 	rootCmd.PersistentFlags().StringVar(&sourceDir, "source-dir", "", "override source provider skill directory")
 	rootCmd.PersistentFlags().StringArrayVar(&targetDirFlags, "target-dir", nil, "target directory path (repeatable); use alone for directory mode or with --targets to override a single target's dir")
+	rootCmd.PersistentFlags().StringVar(&manifestPath, "manifest", "", "catalog policy manifest; source paths are relative to --source-dir or the manifest directory")
 }
 
 // buildConfigFromFlags creates a Config from CLI flags (--source, --targets, --target-dir, --source-dir).
@@ -85,13 +89,24 @@ func buildConfigFromFlags() (*config.Config, error) {
 
 	// Pure directory mode: --source-dir + --target-dir, no provider names needed.
 	source := inlineSource
-	if source == "" && sourceDir != "" {
+	resolvedSourceDir := sourceDir
+	if source == "" && manifestPath != "" {
+		source = "directory"
+		if resolvedSourceDir == "" {
+			absManifest, err := filepath.Abs(manifestPath)
+			if err != nil {
+				return nil, fmt.Errorf("resolve manifest path: %w", err)
+			}
+			resolvedSourceDir = filepath.Dir(absManifest)
+		}
+	}
+	if source == "" && resolvedSourceDir != "" {
 		source = "directory"
 	}
 
 	cfg := &config.Config{
 		Source:    source,
-		SourceDir: sourceDir,
+		SourceDir: resolvedSourceDir,
 	}
 
 	// Directory mode: --target-dir without --targets
