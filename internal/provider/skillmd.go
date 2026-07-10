@@ -8,6 +8,7 @@ package provider
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -94,7 +95,7 @@ func (p *skillMDProvider) WriteSkill(skill Skill) error {
 			return fmt.Errorf("%s: write supporting file %q for skill %q: %w", p.providerName, filename, skill.Name, err)
 		}
 		if err := os.MkdirAll(filepath.Dir(fp), 0755); err != nil {
-			return fmt.Errorf("%s: create supporting directory %q for skill %q: %w", p.providerName, filepath.Dir(filename), skill.Name, err)
+			return fmt.Errorf("%s: create parent directory for supporting file %q in skill %q: %w", p.providerName, filename, skill.Name, err)
 		}
 		if err := os.WriteFile(fp, []byte(content), 0644); err != nil {
 			return fmt.Errorf("%s: write supporting file %q for skill %q: %w", p.providerName, filename, skill.Name, err)
@@ -172,22 +173,58 @@ func (p *skillMDProvider) readSkillFile(name, path string) (*Skill, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("read supporting files: %w", err)
+		return nil, fmt.Errorf("read supporting files for skill %q in %s: %w", name, skillDir, err)
 	}
 
 	return skill, nil
 }
 
 func confinedPath(root, relative string) (string, error) {
-	if relative == "" || filepath.IsAbs(relative) {
-		return "", fmt.Errorf("path must be non-empty and relative")
+	if relative == "" || strings.Contains(relative, `\`) {
+		return "", fmt.Errorf("path must be a non-empty slash-separated relative path")
 	}
-	joined := filepath.Join(root, filepath.FromSlash(relative))
+	clean := path.Clean(relative)
+	if clean != relative || clean == "." || path.IsAbs(clean) || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf("path must be canonical and relative")
+	}
+	if strings.EqualFold(clean, "SKILL.md") {
+		return "", fmt.Errorf("supporting files cannot replace SKILL.md")
+	}
+	joined := filepath.Join(root, filepath.FromSlash(clean))
 	rel, err := filepath.Rel(root, joined)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path escapes skill directory")
 	}
+	if err := rejectSymlinkComponents(root, clean); err != nil {
+		return "", err
+	}
 	return joined, nil
+}
+
+func rejectSymlinkComponents(root, relative string) error {
+	rootInfo, err := os.Lstat(root)
+	if err != nil {
+		return fmt.Errorf("inspect skill directory: %w", err)
+	}
+	if rootInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("skill directory is a symlink")
+	}
+
+	current := root
+	for _, component := range strings.Split(relative, "/") {
+		current = filepath.Join(current, component)
+		info, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("inspect supporting path %q: %w", relative, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("supporting path %q contains a symlink", relative)
+		}
+	}
+	return nil
 }
 
 // stripFrontmatter removes YAML frontmatter (--- delimited) from content.
