@@ -92,6 +92,30 @@ func TestBuildConfigFromFlags_SourceDirWithoutTargetDir(t *testing.T) {
 	}
 }
 
+func TestBuildConfigFromFlags_SourceDirWithProviderTargets(t *testing.T) {
+	saveAndRestore(t)
+
+	inlineSource = ""
+	inlineTargets = []string{"claude", "codex"}
+	sourceDir = "/catalog/skills"
+	targetDirFlags = nil
+
+	cfg, err := buildConfigFromFlags()
+	if err != nil {
+		t.Fatalf("buildConfigFromFlags() error = %v", err)
+	}
+
+	if cfg.Source != "directory" {
+		t.Errorf("Source = %q, want %q", cfg.Source, "directory")
+	}
+	if cfg.SourceDir != "/catalog/skills" {
+		t.Errorf("SourceDir = %q, want %q", cfg.SourceDir, "/catalog/skills")
+	}
+	if len(cfg.Targets) != 2 || cfg.Targets[0] != "claude" || cfg.Targets[1] != "codex" {
+		t.Errorf("Targets = %v, want [claude codex]", cfg.Targets)
+	}
+}
+
 func TestBuildConfigFromFlags_InlineSourceStillWorks(t *testing.T) {
 	saveAndRestore(t)
 

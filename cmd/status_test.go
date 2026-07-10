@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -145,5 +146,44 @@ func TestStatusMultipleTargets(t *testing.T) {
 	}
 	if !strings.Contains(output, "Target: gemini") {
 		t.Error("expected 'Target: gemini' in output")
+	}
+}
+
+func TestStatusJSONIsStableAndReportsDrift(t *testing.T) {
+	source := newMockSource(
+		provider.Skill{Name: "deploy", Content: "deploy content"},
+	)
+	targets := []provider.Provider{
+		&mockProvider{name: "gemini", skills: []provider.Skill{}, readMap: map[string]*provider.Skill{}},
+		&mockProvider{
+			name:   "codex",
+			skills: []provider.Skill{{Name: "deploy"}},
+			readMap: map[string]*provider.Skill{
+				"deploy": {Name: "deploy", Content: "different"},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	err := doStatusJSON(&buf, sync.NewDiffEngine(source, targets), nil)
+	if err == nil {
+		t.Fatal("expected error for drift detected")
+	}
+
+	var got jsonStatusReport
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("invalid JSON output: %v\n%s", err, buf.String())
+	}
+	if !got.Drift {
+		t.Fatal("Drift = false, want true")
+	}
+	if len(got.Targets) != 2 || got.Targets[0].Name != "codex" || got.Targets[1].Name != "gemini" {
+		t.Fatalf("Targets = %#v, want codex then gemini", got.Targets)
+	}
+	if got.Targets[0].Skills[0].Status != "modified" {
+		t.Errorf("codex status = %q, want modified", got.Targets[0].Skills[0].Status)
+	}
+	if got.Targets[1].Skills[0].Status != "missing-in-target" {
+		t.Errorf("gemini status = %q, want missing-in-target", got.Targets[1].Skills[0].Status)
 	}
 }

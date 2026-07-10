@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/itsHabib/skill-sync/internal/config"
 	"github.com/itsHabib/skill-sync/internal/provider"
+	"github.com/spf13/cobra"
 )
 
 var (
 	cfgPath string
 	// Cfg holds the resolved configuration used by all subcommands.
-	Cfg           *config.Config
-	inlineSource  string
-	inlineTargets []string
+	Cfg            *config.Config
+	inlineSource   string
+	inlineTargets  []string
 	sourceDir      string
 	targetDirFlags []string
 )
@@ -23,8 +23,8 @@ var rootCmd = &cobra.Command{
 	Use:          "skill-sync",
 	Short:        "Sync AI skills across providers",
 	SilenceUsage: true,
-	Long: `skill-sync reads skills from a source AI assistant (Claude Code, Copilot,
-Gemini CLI, Factory) and syncs them to target providers with drift detection.
+	Long: `skill-sync reads skills from a source AI assistant (Claude Code, Codex,
+Copilot, Gemini CLI, Factory) and syncs them to target providers with drift detection.
 
 All providers use the Agent Skills open standard (SKILL.md format).
 
@@ -41,7 +41,7 @@ keep all your providers in lockstep.`,
   skill-sync diff copilot
 
   # Override source directory
-  skill-sync sync --source-dir ~/.claude/skills
+  skill-sync sync --source-dir ./skills --targets claude,codex
 
   # Override target directory (single target only)
   skill-sync sync --source claude --targets copilot --target-dir /path/to/skills`,
@@ -53,7 +53,8 @@ keep all your providers in lockstep.`,
 		var cfg *config.Config
 		var err error
 
-		if inlineSource != "" || (sourceDir != "" && len(targetDirFlags) > 0) {
+		inlineDirectoryMode := sourceDir != "" && (len(inlineTargets) > 0 || len(targetDirFlags) > 0)
+		if inlineSource != "" || inlineDirectoryMode {
 			cfg, err = buildConfigFromFlags()
 		} else {
 			cfg, err = loadConfigFromFile()
@@ -79,7 +80,7 @@ func init() {
 // buildConfigFromFlags creates a Config from CLI flags (--source, --targets, --target-dir, --source-dir).
 func buildConfigFromFlags() (*config.Config, error) {
 	if len(inlineTargets) == 0 && len(targetDirFlags) == 0 {
-		return nil, fmt.Errorf("--targets or --target-dir is required when using --source. Example: --source claude --targets copilot,gemini")
+		return nil, fmt.Errorf("--targets or --target-dir is required when using --source or --source-dir. Example: --source-dir ./skills --targets claude,codex")
 	}
 
 	// Pure directory mode: --source-dir + --target-dir, no provider names needed.
