@@ -350,6 +350,90 @@ func TestWriteSkill_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestWriteSkill_RoundTripNestedSupportingFiles(t *testing.T) {
+	dir := t.TempDir()
+	p := newTestProvider("claude", dir)
+	original := Skill{
+		Name:    "interview",
+		Content: "# Interview\n",
+		SupportingFiles: map[string]string{
+			"adapters/doc.md":            "doc adapter",
+			"templates/header.md":        "header",
+			"workflows/interview.js":     "workflow",
+			"workflows/nested/readme.md": "nested",
+		},
+	}
+	if err := p.WriteSkill(original); err != nil {
+		t.Fatal(err)
+	}
+	got, err := p.ReadSkill("interview")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.SupportingFiles, original.SupportingFiles) {
+		t.Fatalf("SupportingFiles = %#v, want %#v", got.SupportingFiles, original.SupportingFiles)
+	}
+}
+
+func TestWriteSkill_RejectsSupportingFileTraversal(t *testing.T) {
+	p := newTestProvider("claude", t.TempDir())
+	err := p.WriteSkill(Skill{
+		Name:            "unsafe",
+		Content:         "# Unsafe\n",
+		SupportingFiles: map[string]string{"../escape.md": "nope"},
+	})
+	if err == nil {
+		t.Fatal("WriteSkill accepted a supporting path outside the skill directory")
+	}
+}
+
+func TestWriteSkill_RejectsRootAndNonCanonicalSupportingPaths(t *testing.T) {
+	for _, filename := range []string{"SKILL.md", "./SKILL.md", "a/../b.md", "a//b.md"} {
+		t.Run(filename, func(t *testing.T) {
+			p := newTestProvider("claude", t.TempDir())
+			err := p.WriteSkill(Skill{
+				Name:            "unsafe",
+				Content:         "# Original\n",
+				SupportingFiles: map[string]string{filename: "replacement"},
+			})
+			if err == nil {
+				t.Fatalf("WriteSkill accepted non-canonical supporting path %q", filename)
+			}
+			data, readErr := os.ReadFile(filepath.Join(p.SkillDir(), "unsafe", "SKILL.md"))
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if string(data) != "# Original\n" {
+				t.Fatalf("root SKILL.md was overwritten through %q", filename)
+			}
+		})
+	}
+}
+
+func TestWriteSkill_RejectsPreexistingSymlinkDirectory(t *testing.T) {
+	dir := t.TempDir()
+	p := newTestProvider("claude", dir)
+	skillDir := filepath.Join(dir, "unsafe")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(skillDir, "templates")); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+	err := p.WriteSkill(Skill{
+		Name:            "unsafe",
+		Content:         "# Unsafe\n",
+		SupportingFiles: map[string]string{"templates/escape.md": "nope"},
+	})
+	if err == nil {
+		t.Fatal("WriteSkill followed a pre-existing symlink directory")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "escape.md")); !os.IsNotExist(err) {
+		t.Fatalf("supporting file escaped through symlink: %v", err)
+	}
+}
+
 func TestWriteSkill_RoundTrip_NoDescription(t *testing.T) {
 	dir := t.TempDir()
 	p := newTestProvider("claude", dir)

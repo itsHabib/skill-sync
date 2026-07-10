@@ -19,8 +19,9 @@ type Skill struct {
 	// Content is the full skill content including the description line.
 	Content string
 
-	// SupportingFiles maps relative filenames (e.g., "TEMPLATE.md") to their
-	// content for any files in the skill directory besides SKILL.md.
+	// SupportingFiles maps slash-separated relative paths (e.g.,
+	// "templates/TEMPLATE.md") to content for every file below the skill
+	// directory besides the root SKILL.md.
 	SupportingFiles map[string]string
 
 	// Arguments contains extracted argument placeholders (e.g., "$ARGUMENTS", "${PROJECT}").
